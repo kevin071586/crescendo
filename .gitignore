@@ -1,1 +1,12 @@
+# CMake files
+#----------------------------
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
 
+
+# Application files
+#----------------------------
+main
+*.swp
