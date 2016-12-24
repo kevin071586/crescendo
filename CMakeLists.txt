@@ -66,6 +66,7 @@ LINK_LIBRARIES(${Trilinos_LIBRARIES})
 ADD_EXECUTABLE( crescendo 
   ${CRESCENDO_DIR}/src/crescendo.cpp
   ${CRESCENDO_DIR}/src/integrateMatrices.cpp
+  ${CRESCENDO_DIR}/src/ElasticMaterial.cpp
   )
 
 

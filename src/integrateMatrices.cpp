@@ -70,3 +70,130 @@ void integrateStiffnessMatrixAB(FieldContainer<double>& stiffnessMatrixAB,
   return;
 }
 
+//-------------------------------------------------------------------------------- 
+// 
+// This function computes the complete stiffness matrix by evaluating 9 times, 
+// once for each Cijkl pair (i,k).
+//
+// HEX8: The complete element stiffness matrix can be viewed as an 8x8 set of 
+// submatrices, where each submatrix K_ik is a 3x3 corresponding to a single node.
+// Displacements must then be in a vector u=[u_1, u_2, ... u_8] where u_1 is a
+// sub-vector u_1 = [u_1x, u1y, u1z]
+//
+// The submatrices K_ik(a,b) are obtained by interlacing the K_ab submatrices:
+//
+// K = [ K_11(1,1), K_12(1,1), K_13(1,1), | K_11(1,2), ... K_13(1,8) ]
+//     [ K_21(1,1), K_22(1,1), K_23(1,1), | K_21(1,2), ...           ]
+//     [ K_31(1,1), K_32(1,1), K_33(1,1), | K_31(1,2), ...           ]
+//     ---------------------------------------------------------------
+//     [ K_11(2,1), K_12(2,1), K_13(2,1), | K_11(2,2), ...           ]
+//     [                                                             ]
+//     [                                                             ]
+//     [ ...                                               K_33(8,8) ]
+//
+// Output: 
+//  stiffnessMatrix - (C,24,24) field container (HEX8) 
+//
+//-------------------------------------------------------------------------------- 
+void integrateStiffnessMatrix(FieldContainer<double>& stiffnessMatrix, 
+                              FieldContainer<double> leftArg, 
+                              FieldContainer<double> rightArg, 
+                              FieldContainer<double> C) {
+
+  const int num_elements = leftArg.dimension(0);
+  const int space_dim = leftArg.dimension(3);
+  const int num_shape_fields = leftArg.dimension(1);
+
+  FieldContainer<double> stiffnessMatrixAB(num_elements, num_shape_fields, num_shape_fields);
+
+  for( int i=0; i<space_dim; ++i ){
+    for( int k=0; k<space_dim; ++k ){
+      integrateStiffnessMatrixAB(stiffnessMatrixAB, leftArg, rightArg, C, i, k); 
+
+      for( int a=0; a<num_shape_fields; ++a ){
+        for( int b=0; b<num_shape_fields; ++b ){
+          const int idx_row = a*space_dim + i;
+          const int idx_col = b*space_dim + k;
+
+          for( int idx_cell=0; idx_cell < num_elements; ++idx_cell ){
+            stiffnessMatrix(idx_cell, idx_row, idx_col) = stiffnessMatrixAB(idx_cell,a,b);
+          }
+        }
+      }
+    }
+  }
+
+  return;
+}
+
+
+//-------------------------------------------------------------------------------- 
+// Simple wrapper around FunctionSpaceTools::integrate for computing a 
+// mass matrix.  Could also include mass-lumping functionality eventually.
+// 
+// integrate: mass matrix calculations
+//
+// Output:        2x8x8   (C,L,R)
+// Left Fields:   2x8     (C,L,P)
+// Right Fields:  2x8     (C,R,P)
+//
+// This calculation contracts, for all cells "C", point dimension "P" which
+// denotes the number of integration points.
+//-------------------------------------------------------------------------------- 
+void integrateMassMatrixAB(FieldContainer<double>& massMatrixAB, 
+                                FieldContainer<double> leftArg, 
+                                FieldContainer<double> rightArg,
+                                const double rho) {
+
+  // scale left argument by density: assuming constant over the element.
+  const int num_elements = leftArg.dimension(0);
+  const int num_shape_fields = leftArg.dimension(1);
+  const int num_cub_points = leftArg.dimension(2);
+
+  FieldContainer<double> leftArgScaled(num_elements, num_shape_fields, num_cub_points);
+
+  for(int C=0; C<num_elements; ++C) {
+    for(int i=0; i<num_shape_fields; ++i){
+      for(int j=0; j<num_cub_points; ++j){
+        leftArgScaled(C,i,j) = rho*leftArg(C,i,j);
+      }
+    }
+  }
+
+  // integrate mass matrix
+  fst::integrate<double>(massMatrixAB, leftArgScaled, rightArg, Intrepid::COMP_CPP);
+  return;
+}
+
+//-------------------------------------------------------------------------------- 
+// Compute full mass matrix for an element, in 3 dimensions.
+//-------------------------------------------------------------------------------- 
+void integrateMassMatrix(FieldContainer<double>& massMatrix, 
+                              FieldContainer<double> leftArg, 
+                              FieldContainer<double> rightArg,
+                              const double rho,
+                              const unsigned space_dim) {
+
+  const int num_elements = leftArg.dimension(0);
+  const int num_shape_fields = leftArg.dimension(1);
+
+  FieldContainer<double> massMatrixAB(num_elements, num_shape_fields, num_shape_fields);
+
+  // Assemble total element mass matrix
+  for(int idx_cell=0; idx_cell<num_elements; ++idx_cell) {
+    integrateMassMatrixAB(massMatrixAB, leftArg, rightArg, rho); 
+
+    for(int a=0; a<num_shape_fields; ++a) {
+      for(int b=0; b<num_shape_fields; ++b) {
+        for(int i=0; i<space_dim; ++i) {
+          const int idx_row = a*space_dim + i;
+          const int idx_col = b*space_dim + i;
+          massMatrix(idx_cell, idx_row, idx_col) = massMatrixAB(idx_cell, a, b);
+        }
+      }
+    }
+  }
+
+  return;
+}
+
