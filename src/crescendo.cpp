@@ -17,12 +17,14 @@
 
 #include <Ionit_Initializer.h>
 #include <Ioss_SubSystem.h>
+// #include <Ioss_Region.h>                        // for Region
+
 
 // #include <Epetra_SerialDenseVector.h>
-// #include <Epetra_Map.h>
-// #include <Epetra_MpiComm.h>
+#include <Epetra_Map.h>
+#include <Epetra_MpiComm.h>
 // #include <Epetra_Vector.h>
-// #include <Epetra_CrsMatrix.h>
+#include <Epetra_FECrsMatrix.h>
  
 #include <Intrepid_CellTools.hpp>
 #include <Intrepid_FieldContainer.hpp>
@@ -33,6 +35,7 @@
 #include <Teuchos_ArrayRCP.hpp>
 #include <Teuchos_Array.hpp>
 #include <Teuchos_ArrayView.hpp>
+// #include <Teuchos_RCP.hpp>
 
 #include <integrateMatrices.hpp>
 #include <ElasticMaterial.hpp>
@@ -62,7 +65,8 @@ int main(int argc, char** argv) {
 
   // Define the input file
   std::string dbtype("exodusII");
-  std::string in_filename("two_hex8_elements.g");
+  //std::string in_filename("two_hex8_elements.g");
+  std::string in_filename("test_2elem.g");
   //std::string in_filename("hex8_10x10x10.g");
 
   // --------------------------------------------------------------------------
@@ -81,8 +85,6 @@ int main(int argc, char** argv) {
 
   // Populate/read in the bulk mesh data
   stkMeshIoBroker.populate_bulk_data(); 
-
-  // Get bulk data object for the mesh
   stk::mesh::BulkData &stkMeshBulkData = stkMeshIoBroker.bulk_data();
 
   // Select local processor elements 
@@ -136,6 +138,61 @@ int main(int argc, char** argv) {
 
   // --------------------------------------------------------------------------
   //
+  // Epetra setup
+  // 
+  // --------------------------------------------------------------------------
+
+  // Wrap the MPI communicator so that Epetra can use it
+  Epetra_MpiComm epetra_comm (comm);
+
+  // TODO: experiment with different selectors.  I am trying to robustly
+  // select all nodes on the process, including shared nodes.
+  stk::mesh::Selector allEntities = stkMeshMetaData.universal_part() & 
+                                      !stkMeshMetaData.aura_part();
+  std::vector<unsigned> entityCounts;
+  stk::mesh::count_entities(allEntities, stkMeshBulkData, entityCounts);
+  int num_local_nodes = entityCounts[stk::topology::NODE_RANK];
+  int num_local_elements = entityCounts[stk::topology::ELEMENT_RANK];
+  std::cout << "num_selected_elements: " << entityCounts[stk::topology::ELEMENT_RANK] << std::endl;
+  std::cout << "num_selected_nodes:    " << entityCounts[stk::topology::NODE_RANK] << std::endl;
+
+  int num_local_DOF = spatialDim*num_local_nodes;
+  int num_nonzero_estimate = num_local_DOF; 
+
+  // Select local processor nodes
+  std::vector<int> my_global_id_map(num_local_elements*nodesPerHex);
+
+  // stk::mesh::Selector local_node_selector = stkMeshMetaData.locally_owned_part();
+  // const stk::mesh::BucketVector node_buckets =
+  //   stkMeshBulkData.get_buckets(stk::topology::NODE_RANK, local_node_selector);
+  // for (size_t bucketIndex = 0; bucketIndex < node_buckets.size(); ++bucketIndex) {
+  //   stk::mesh::Bucket &node_bucket = *node_buckets[bucketIndex];
+  //   for (size_t node_index = 0; node_index < node_bucket.size(); ++node_index) {
+  //     stk::mesh::Entity node = node_bucket[node_index];
+  //     int local_id = stkMeshBulkData.local_id(node);
+  //     my_global_id_map[local_id] = stkMeshBulkData.identifier(node);
+  //   }
+  // }
+
+  for (size_t bucketIndex = 0; bucketIndex < elementBuckets.size(); ++bucketIndex) {
+    stk::mesh::Bucket &elemBucket = *elementBuckets[bucketIndex];
+    unsigned num_elements = elemBucket.size();
+    for (size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex) {
+      stk::mesh::Entity elem = elemBucket[elemIndex];
+      unsigned numNodes = stkMeshBulkData.num_nodes(elem);
+      stk::mesh::Entity const* nodes = stkMeshBulkData.begin_nodes(elem);
+      for (unsigned inode = 0; inode < numNodes; ++inode) {
+        int local_id = stkMeshBulkData.local_id(nodes[inode]);
+        my_global_id_map[local_id] = stkMeshBulkData.identifier(nodes[inode]);
+      }
+    }
+  }
+
+  Epetra_Map row_map(-1, num_local_nodes, &my_global_id_map[0], 0, epetra_comm);
+  Epetra_FECrsMatrix stiffness_matrix(Copy, row_map, num_nonzero_estimate);
+
+  // --------------------------------------------------------------------------
+  //
   // Loop over element buckets
   //
   // --------------------------------------------------------------------------
@@ -147,7 +204,7 @@ int main(int argc, char** argv) {
     // Loop over elements in each bucket
     //
     unsigned num_elements = elemBucket.size();
-    std::cout << "num_elements: " << num_elements << std::endl;
+    std::cout << "num_bucket_elements: " << num_elements << std::endl;
     FieldContainer<double> hexNodes(num_elements, nodesPerHex, spatialDim);
 
     // TODO: make a getNodeCoordinates function for this loop.
@@ -156,6 +213,11 @@ int main(int argc, char** argv) {
 
       unsigned numNodes = stkMeshBulkData.num_nodes(elem);
       stk::mesh::Entity const* nodes = stkMeshBulkData.begin_nodes(elem);
+
+      // Note: global ID (identifier) not necessarily contiguous.  Can be any integer.
+      int local_id = stkMeshBulkData.local_id(elem);
+      int global_id = stkMeshBulkData.identifier(elem);
+      std::cout << "local id: " << local_id << ", global id: " << global_id << std::endl;
 
       //
       // Loop over each node in the current element
@@ -166,8 +228,18 @@ int main(int argc, char** argv) {
         hexNodes(elemIndex, inode, 0) = coords[0];
         hexNodes(elemIndex, inode, 1) = coords[1];
         hexNodes(elemIndex, inode, 2) = coords[2];
+   
+        // TODO: just a test for filling the epetra matrix
+        // Fill epetra matrix
+        double value = local_id;
+        int num_entries = 1;
+        int row_idx = stkMeshBulkData.local_id(nodes[inode]);
+        int col_idx = row_idx;
+        stiffness_matrix.InsertGlobalValues(row_idx, num_entries, &value, &col_idx);
       }
     }
+    stiffness_matrix.GlobalAssemble();
+    std::cout << stiffness_matrix << std::endl;
 
     // Compute cell Jacobians
     FieldContainer<double> hexJacobian(num_elements , numCubPoints, spatialDim, spatialDim);

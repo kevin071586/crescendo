@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
       }
     } 
 
-    // Demonstrate issues to understand when  inserting additional entries when
+    // Demonstrate issues to understand when inserting additional entries when
     // using multiple MPI processes.  Only execute this section of code if the
     // calling process has ID == 1.
     if( epetra_comm.MyPID() == 1 ){
