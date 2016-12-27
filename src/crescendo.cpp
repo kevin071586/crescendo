@@ -1,9 +1,5 @@
 #include <iostream>
-
-//#include <gtest/gtest.h>                      // for AssertHelper, EXPECT_NE, etc
-//#include <stddef.h>                           // for size_t, NULL
-//#include <unistd.h>                           // for unlink
-#include <string>                               // for string
+#include <string>
 #include <fstream>
 
 #include "stk_mesh/base/Bucket.hpp"             // for Bucket
