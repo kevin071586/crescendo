@@ -147,20 +147,64 @@ int main(int argc, char** argv) {
 
   // TODO: experiment with different selectors.  I am trying to robustly
   // select all nodes on the process, including shared nodes.
-  stk::mesh::Selector allEntities = stkMeshMetaData.universal_part() & 
-                                      !stkMeshMetaData.aura_part();
+  //
+  // For assembly, I'm expecting each processor to have 1 element, 
+  // and 8 nodes in that element.
+  stk::mesh::Selector allEntities = stkMeshMetaData.universal_part();
   std::vector<unsigned> entityCounts;
   stk::mesh::count_entities(allEntities, stkMeshBulkData, entityCounts);
   int num_local_nodes = entityCounts[stk::topology::NODE_RANK];
   int num_local_elements = entityCounts[stk::topology::ELEMENT_RANK];
+  std::cout << "SELECTOR #1 -- Universal Part" << std::endl;
   std::cout << "num_selected_elements: " << entityCounts[stk::topology::ELEMENT_RANK] << std::endl;
   std::cout << "num_selected_nodes:    " << entityCounts[stk::topology::NODE_RANK] << std::endl;
+
+  allEntities = stkMeshMetaData.universal_part() & !stkMeshMetaData.aura_part();
+  stk::mesh::count_entities(allEntities, stkMeshBulkData, entityCounts);
+  num_local_nodes = entityCounts[stk::topology::NODE_RANK];
+  num_local_elements = entityCounts[stk::topology::ELEMENT_RANK];
+  std::cout << "SELECTOR #2 -- Universal Part AND NOT Aura Part" << std::endl;
+  std::cout << "num_selected_elements: " << entityCounts[stk::topology::ELEMENT_RANK] << std::endl;
+  std::cout << "num_selected_nodes:    " << entityCounts[stk::topology::NODE_RANK] << std::endl;
+ 
+  allEntities = stkMeshMetaData.locally_owned_part();
+  stk::mesh::count_entities(allEntities, stkMeshBulkData, entityCounts);
+  num_local_nodes = entityCounts[stk::topology::NODE_RANK];
+  num_local_elements = entityCounts[stk::topology::ELEMENT_RANK];
+  std::cout << "SELECTOR #3 -- Locally Owned Part" << std::endl;
+  std::cout << "num_selected_elements: " << entityCounts[stk::topology::ELEMENT_RANK] << std::endl;
+  std::cout << "num_selected_nodes:    " << entityCounts[stk::topology::NODE_RANK] << std::endl;
+
+  allEntities = stkMeshMetaData.globally_shared_part();
+  stk::mesh::count_entities(allEntities, stkMeshBulkData, entityCounts);
+  num_local_nodes = entityCounts[stk::topology::NODE_RANK];
+  num_local_elements = entityCounts[stk::topology::ELEMENT_RANK];
+  std::cout << "SELECTOR #4 -- Globally Shared Part" << std::endl;
+  std::cout << "num_selected_elements: " << entityCounts[stk::topology::ELEMENT_RANK] << std::endl;
+  std::cout << "num_selected_nodes:    " << entityCounts[stk::topology::NODE_RANK] << std::endl;
+
+  allEntities = stkMeshMetaData.locally_owned_part() | stkMeshMetaData.globally_shared_part();
+  stk::mesh::count_entities(allEntities, stkMeshBulkData, entityCounts);
+  num_local_nodes = entityCounts[stk::topology::NODE_RANK];
+  num_local_elements = entityCounts[stk::topology::ELEMENT_RANK];
+  std::cout << "SELECTOR #5 -- Locally Owned OR Globally Shared Part" << std::endl;
+  std::cout << "num_selected_elements: " << entityCounts[stk::topology::ELEMENT_RANK] << std::endl;
+  std::cout << "num_selected_nodes:    " << entityCounts[stk::topology::NODE_RANK] << std::endl;
+
+
+
+
+
+
+
+
+
 
   int num_local_DOF = spatialDim*num_local_nodes;
   int num_nonzero_estimate = num_local_DOF; 
 
   // Select local processor nodes
-  std::vector<int> my_global_id_map(num_local_elements*nodesPerHex);
+  // std::vector<int> my_global_id_map(num_local_elements*nodesPerHex);
 
   // stk::mesh::Selector local_node_selector = stkMeshMetaData.locally_owned_part();
   // const stk::mesh::BucketVector node_buckets =
@@ -174,22 +218,22 @@ int main(int argc, char** argv) {
   //   }
   // }
 
-  for (size_t bucketIndex = 0; bucketIndex < elementBuckets.size(); ++bucketIndex) {
-    stk::mesh::Bucket &elemBucket = *elementBuckets[bucketIndex];
-    unsigned num_elements = elemBucket.size();
-    for (size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex) {
-      stk::mesh::Entity elem = elemBucket[elemIndex];
-      unsigned numNodes = stkMeshBulkData.num_nodes(elem);
-      stk::mesh::Entity const* nodes = stkMeshBulkData.begin_nodes(elem);
-      for (unsigned inode = 0; inode < numNodes; ++inode) {
-        int local_id = stkMeshBulkData.local_id(nodes[inode]);
-        my_global_id_map[local_id] = stkMeshBulkData.identifier(nodes[inode]);
-      }
-    }
-  }
+  // for (size_t bucketIndex = 0; bucketIndex < elementBuckets.size(); ++bucketIndex) {
+  //   stk::mesh::Bucket &elemBucket = *elementBuckets[bucketIndex];
+  //   unsigned num_elements = elemBucket.size();
+  //   for (size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex) {
+  //     stk::mesh::Entity elem = elemBucket[elemIndex];
+  //     unsigned numNodes = stkMeshBulkData.num_nodes(elem);
+  //     stk::mesh::Entity const* nodes = stkMeshBulkData.begin_nodes(elem);
+  //     for (unsigned inode = 0; inode < numNodes; ++inode) {
+  //       int local_id = stkMeshBulkData.local_id(nodes[inode]);
+  //       my_global_id_map[local_id] = stkMeshBulkData.identifier(nodes[inode]);
+  //     }
+  //   }
+  // }
 
-  Epetra_Map row_map(-1, num_local_nodes, &my_global_id_map[0], 0, epetra_comm);
-  Epetra_FECrsMatrix stiffness_matrix(Copy, row_map, num_nonzero_estimate);
+  // Epetra_Map row_map(-1, num_local_nodes, &my_global_id_map[0], 0, epetra_comm);
+  // Epetra_FECrsMatrix stiffness_matrix(Copy, row_map, num_nonzero_estimate);
 
   // --------------------------------------------------------------------------
   //
@@ -231,15 +275,15 @@ int main(int argc, char** argv) {
    
         // TODO: just a test for filling the epetra matrix
         // Fill epetra matrix
-        double value = local_id;
-        int num_entries = 1;
-        int row_idx = stkMeshBulkData.local_id(nodes[inode]);
-        int col_idx = row_idx;
-        stiffness_matrix.InsertGlobalValues(row_idx, num_entries, &value, &col_idx);
+        // double value = local_id;
+        // int num_entries = 1;
+        // int row_idx = stkMeshBulkData.local_id(nodes[inode]);
+        // int col_idx = row_idx;
+        // stiffness_matrix.InsertGlobalValues(row_idx, num_entries, &value, &col_idx);
       }
     }
-    stiffness_matrix.GlobalAssemble();
-    std::cout << stiffness_matrix << std::endl;
+    // stiffness_matrix.GlobalAssemble();
+    // std::cout << stiffness_matrix << std::endl;
 
     // Compute cell Jacobians
     FieldContainer<double> hexJacobian(num_elements , numCubPoints, spatialDim, spatialDim);
