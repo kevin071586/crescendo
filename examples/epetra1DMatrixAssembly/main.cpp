@@ -42,7 +42,13 @@ int main(int argc, char** argv) {
     // Wrap the MPI communicator so that Epetra can use it
     Epetra_MpiComm epetra_comm(comm);
 
-    // Construct an Epetra_Map with num_elements and index base of 0
+    // Construct an Epetra_Map
+    // (1) ... with num_elements and index base of 0
+    // (2) Note that the map doesn't refer to actual row numbers.  It only
+    //     refers to global ID's (10, 20, 30.. etc.) for its construction.
+    //     Thus, it seems as though there is no concept of "first row" in
+    //     whatever object (matrix, vector) is constructed from this map.
+    //
     int num_local_nodes = 0;
     std::vector<int> global_node_ids;
     if( epetra_comm.MyPID() == 0 ){
@@ -73,6 +79,7 @@ int main(int argc, char** argv) {
     std::cout << "Local stiffness matrix: " <<  local_stiffness_matrix << std::endl;
 
     // Insert local stiffness matrices into the global stiffness matrix
+    // InsertGlobalValues(rowID, numEntries, values, colIDs)
     if( epetra_comm.MyPID() == 0 ){
       std::vector<int> row_id = {10, 20};
       std::vector<int> col_id = {10, 20};

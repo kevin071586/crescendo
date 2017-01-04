@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
 // HELPER FUNCTION: Print out nodes of the currently selected elements
 // ==========================================================================
 void printElementNodes(stk::mesh::Selector allEntities, stk::mesh::BulkData &bulk_data) {
-  
+
   std::vector<unsigned> entityCounts;
   stk::mesh::count_entities(allEntities, bulk_data, entityCounts);
   int num_nodes = entityCounts[stk::topology::NODE_RANK];
@@ -102,6 +102,7 @@ void printElementNodes(stk::mesh::Selector allEntities, stk::mesh::BulkData &bul
 
   const stk::mesh::BucketVector buckets =
     bulk_data.get_buckets(stk::topology::ELEMENT_RANK, allEntities);
+  std::cout << "number of buckets: " << buckets.size() << std::endl;
 
   for (size_t bucketIndex = 0; bucketIndex < buckets.size(); ++bucketIndex) {
     stk::mesh::Bucket &elemBucket = *buckets[bucketIndex];
