@@ -263,7 +263,7 @@ int main(int argc, char** argv) {
     integrateMassMatrix(massMatrix, hexGValsTransformed, hexGValsTransformedWeighted,
         rho,spatialDim);
 
-    // assemble into global stiffness matrix
+    // assemble into global matrices
     for(size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex){
       for( int i=0; i<massMatrix.dimension(1); ++i ){
         for( int j=0; j<massMatrix.dimension(2); ++j ){
@@ -274,16 +274,6 @@ int main(int argc, char** argv) {
         }
       }
     }
-
-    // quick mass check
-    double total_mass = 0.0;
-    for( int i=0; i<massMatrix.dimension(1); ++i){
-      for( int j=0; j<massMatrix.dimension(2); ++j){
-        total_mass += massMatrix(0,i,j);
-      }
-    }
-    std::cout << "Sum M(i,j) = " << total_mass << std::endl;
-
 
     // -------------------------------------------------------------------------
     // Compute stiffness matrix
