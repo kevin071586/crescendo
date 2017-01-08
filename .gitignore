@@ -12,6 +12,8 @@ main
 *.swp
 bin/crescendo
 *.g.*
+*.dat
+*.csv
 
 # Tags
 #----------------------------
