@@ -37,8 +37,10 @@ FieldContainer<double> ElasticMaterial::stiffnessTensor() {
 
 void ElasticMaterial::setYoungsModulus(double E) {
   m_youngs_modulus = E;  
+  return;
 }
 
 void ElasticMaterial::setPoissonsRatio(double nu) {
-  m_youngs_modulus = nu;  
+  m_poissons_ratio = nu;
+  return;
 }
