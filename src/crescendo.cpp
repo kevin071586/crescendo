@@ -25,6 +25,7 @@
 #include <Epetra_MpiComm.h>
 // #include <Epetra_Vector.h>
 #include <Epetra_FECrsMatrix.h>
+#include <EpetraExt_RowMatrixOut.h>
  
 #include <Intrepid_CellTools.hpp>
 #include <Intrepid_FieldContainer.hpp>
@@ -39,6 +40,7 @@
 
 #include <integrateMatrices.hpp>
 #include <ElasticMaterial.hpp>
+#include <EigenSolver.hpp>
 
 using namespace Intrepid;
 typedef FunctionSpaceTools fst;
@@ -66,8 +68,8 @@ int main(int argc, char** argv) {
   // Define the input file
   std::string dbtype("exodusII");
   //std::string in_filename("two_hex8_elements.g");
-  //std::string in_filename("test_2elem.g");
-  std::string in_filename("hex8_10x10x10.g");
+  std::string in_filename("test_2elem.g");
+  //std::string in_filename("hex8_10x10x10.g");
 
   // --------------------------------------------------------------------------
   //
@@ -150,6 +152,7 @@ int main(int argc, char** argv) {
   int num_local_nodes = entityCounts[stk::topology::NODE_RANK];
   int num_local_elements = entityCounts[stk::topology::ELEMENT_RANK];
   int num_local_DOF = spatialDim*num_local_nodes;
+  std::cout << "Num Local DOF: " << num_local_DOF << std::endl;
 
   int num_nonzero_estimate = spatialDim*num_local_DOF; 
 
@@ -232,8 +235,6 @@ int main(int argc, char** argv) {
         hex_node_global_id(elemIndex, spatialDim*inode + 2) = spatialDim*global_node_id + 2;
       }
     }
-    // stiffness_matrix.GlobalAssemble();
-    // std::cout << stiffness_matrix << std::endl;
 
     // Compute cell Jacobians
     FieldContainer<double> hexJacobian(num_elements , numCubPoints, spatialDim, spatialDim);
@@ -263,7 +264,7 @@ int main(int argc, char** argv) {
     integrateMassMatrix(massMatrix, hexGValsTransformed, hexGValsTransformedWeighted,
         rho,spatialDim);
 
-    // assemble into global matrices
+    // assemble into global matrix
     for(size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex){
       for( int i=0; i<massMatrix.dimension(1); ++i ){
         for( int j=0; j<massMatrix.dimension(2); ++j ){
@@ -302,6 +303,25 @@ int main(int argc, char** argv) {
     integrateStiffnessMatrix(stiffnessMatrix, hexGGradientTransformed,
       hexGGradientTransformedWeighted, C);
 
+    // assemble into global matrix
+    for(size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex){
+      for( int i=0; i<stiffnessMatrix.dimension(1); ++i ){
+        for( int j=0; j<stiffnessMatrix.dimension(2); ++j ){
+          int row_idx = hex_node_global_id(elemIndex, i);
+          int col_idx = hex_node_global_id(elemIndex, j);
+          double value = stiffnessMatrix(elemIndex, i, j);
+          stiffness_matrix.InsertGlobalValues(row_idx, 1, &value, &col_idx);
+
+          // TODO: Debug only --> add diagonal stiffnesses to prevent
+          // singularity in K
+          if( i == j ){
+            value = 0.5;
+            stiffness_matrix.InsertGlobalValues(row_idx, 1, &value, &col_idx);
+          }
+        }
+      }
+    }
+
     // ------------------------------
     // Write out matrices
     // ------------------------------
@@ -315,6 +335,11 @@ int main(int argc, char** argv) {
   } // element bucket loop
 
   mass_matrix.GlobalAssemble();
+  stiffness_matrix.GlobalAssemble();
+
+  // DEBUG: Output matlab-readable files
+  EpetraExt::RowMatrixToMatlabFile("stiff_mat.dat", stiffness_matrix);
+  EpetraExt::RowMatrixToMatlabFile("mass_mat.dat", mass_matrix);
 
   // Check global mass matrix summation
   int my_pid = epetra_comm.MyPID();
@@ -333,9 +358,26 @@ int main(int argc, char** argv) {
 
   //std::cout << mass_matrix << std::endl;
   std::cout << "local mass sum: " << total_local_mass << std::endl;
-  if( my_pid == 0 ){
+  if (my_pid == 0) {
     std::cout << "global mass sum: " << total_global_mass << std::endl;
   }
+
+  // Check stiffness matrix row summations
+  double my_row_sum = 0.0;
+  for (int i = 0; i<stiffness_matrix.NumMyRows(); ++i) {
+    int num_values = stiffness_matrix.NumMyEntries(i);
+    std::vector<double> values(num_values);
+    int global_row = stiffness_matrix.GRID(i);
+    stiffness_matrix.ExtractGlobalRowCopy(global_row, num_values, num_values, &values[0]);
+    for (int j = 0; j<num_values; ++j){
+      my_row_sum += values[j];
+    }
+    std::cout << "Proc[" << my_pid << "]: row " << i << " sum: " << my_row_sum << std::endl;
+  }
+
+  // Solve the eigen problem
+  EigenSolver eigen_solver; 
+  eigen_solver.Solve(stiffness_matrix, mass_matrix, epetra_comm);
 
   // Call finalize for parallel (MPI prints an angry error message without this call!!)
   stk::parallel_machine_finalize();
