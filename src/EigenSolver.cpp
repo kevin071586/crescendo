@@ -20,6 +20,10 @@
 
 #include "ModeLaplace2DQ2.h"
 
+// Include EpetraExt MatrixMatrix helpers.
+#include "EpetraExt_MatrixMatrix.h"
+
+
 
 int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetra_MpiComm& Comm)
 {
@@ -84,15 +88,29 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
   Teuchos::RCP<Epetra_FECrsMatrix> K = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
   Teuchos::RCP<Epetra_FECrsMatrix> M = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
 
+  //===================================================
+  // Create the shifted system K - sigma * M.
+
+  double sigma = 1.0;
+  Teuchos::RCP<Epetra_CrsMatrix> Kshift = Teuchos::rcp( new Epetra_CrsMatrix( *K ) );
+
+  int addErr = EpetraExt::MatrixMatrix::Add( *M, false, -sigma, *Kshift, 1.0 );
+  if (addErr != 0) {
+    printer.print(Anasazi::Errors,"EpetraExt::MatrixMatrix::Add returned with error.\n");
+    return -1;
+  }
+  //===================================================
+
+
   //************************************
   // Call the Block Davidson solver manager
   //***********************************
   //
   //  Variables used for the Block Davidson Method
   //
-  const int    nev         = 8; //10;
-  const int    blockSize   = 9; //10;
-  const int    numBlocks   = 4; //4;
+  const int    nev         = 10;
+  const int    blockSize   = 10;
+  const int    numBlocks   = 2; //4;
   const int    maxRestarts = 100;
   const double tol         = 1.0e-8;
 
@@ -108,8 +126,14 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
 
   // Create the eigenproblem.
   //
+//  Teuchos::RCP<Anasazi::BasicEigenproblem<double, MV, OP> > MyProblem =
+//    Teuchos::rcp( new Anasazi::BasicEigenproblem<double, MV, OP>(K, M, ivec) );
+//
+
+  //====================== SHIFTED VERSION ======================================
   Teuchos::RCP<Anasazi::BasicEigenproblem<double, MV, OP> > MyProblem =
-    Teuchos::rcp( new Anasazi::BasicEigenproblem<double, MV, OP>(K, M, ivec) );
+    Teuchos::rcp( new Anasazi::BasicEigenproblem<double, MV, OP>(Kshift, M, ivec) );
+  //=============================================================================
 
   // Inform the eigenproblem that the operator A is symmetric
   //
@@ -152,6 +176,15 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
   std::vector<Anasazi::Value<double> > evals = sol.Evals;
   Teuchos::RCP<MV> evecs = sol.Evecs;
 
+  //===========================================================
+  // Undo shift transformation; computed eigenvalues are real
+  int numev = sol.numVecs;
+  std::vector<double> compEvals(numev);
+  for (int i=0; i<numev; ++i) {
+    compEvals[i] = evals[i].realpart + sigma;
+  }
+  //===========================================================
+
   // Compute residuals.
   //
   std::vector<double> normR(sol.numVecs);
@@ -181,7 +214,8 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
     <<std::endl;
   os<<"------------------------------------------------------"<<std::endl;
   for (int i=0; i<sol.numVecs; i++) {
-    os<<std::setw(16)<<evals[i].realpart
+    //os<<std::setw(16)<<evals[i].realpart
+    os<<std::setw(16)<<compEvals[i]
       <<std::setw(18)<<normR[i]/evals[i].realpart
       <<std::endl;
   }

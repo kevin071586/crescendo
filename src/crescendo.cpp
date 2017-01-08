@@ -314,10 +314,10 @@ int main(int argc, char** argv) {
 
           // TODO: Debug only --> add diagonal stiffnesses to prevent
           // singularity in K
-          if( row_idx == col_idx ){
-            value = 0.5;
-            stiffness_matrix.InsertGlobalValues(row_idx, 1, &value, &col_idx);
-          }
+          // if( row_idx == col_idx ){
+          //   value = 0.5;
+          //   stiffness_matrix.InsertGlobalValues(row_idx, 1, &value, &col_idx);
+          // }
         }
       }
     }
@@ -362,24 +362,24 @@ int main(int argc, char** argv) {
     std::cout << "global mass sum: " << total_global_mass << std::endl;
   }
 
-  // Check stiffness matrix row summations
-  double my_row_sum = 0.0;
-  for (int i = 0; i<stiffness_matrix.NumMyRows(); ++i) {
-    int num_values = stiffness_matrix.NumMyEntries(i);
-    std::vector<double> values(num_values);
-    int global_row = stiffness_matrix.GRID(i);
-    stiffness_matrix.ExtractGlobalRowCopy(global_row, num_values, num_values, &values[0]);
-    for (int j = 0; j<num_values; ++j){
-      my_row_sum += values[j];
-    }
-    std::cout << "Proc[" << my_pid << "]: row " << i << " sum: " << my_row_sum << std::endl;
-    my_row_sum = 0.0;
-  }
+//  // Check stiffness matrix row summations
+//  double my_row_sum = 0.0;
+//  for (int i = 0; i<stiffness_matrix.NumMyRows(); ++i) {
+//    int num_values = stiffness_matrix.NumMyEntries(i);
+//    std::vector<double> values(num_values);
+//    int global_row = stiffness_matrix.GRID(i);
+//    stiffness_matrix.ExtractGlobalRowCopy(global_row, num_values, num_values, &values[0]);
+//    for (int j = 0; j<num_values; ++j){
+//      my_row_sum += values[j];
+//    }
+//    std::cout << "Proc[" << my_pid << "]: row " << i << " sum: " << my_row_sum << std::endl;
+//    my_row_sum = 0.0;
+//  }
 
   // Solve the eigen problem
   EigenSolver eigen_solver; 
-  //eigen_solver.Solve(stiffness_matrix, mass_matrix, epetra_comm);
-  eigen_solver.SolveIfpack(stiffness_matrix, mass_matrix, epetra_comm);
+  eigen_solver.Solve(stiffness_matrix, mass_matrix, epetra_comm);
+  //eigen_solver.SolveIfpack(stiffness_matrix, mass_matrix, epetra_comm);
 
   // Call finalize for parallel (MPI prints an angry error message without this call!!)
   stk::parallel_machine_finalize();
