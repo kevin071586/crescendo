@@ -378,7 +378,8 @@ int main(int argc, char** argv) {
 
   // Solve the eigen problem
   EigenSolver eigen_solver; 
-  eigen_solver.Solve(stiffness_matrix, mass_matrix, epetra_comm);
+  //eigen_solver.Solve(stiffness_matrix, mass_matrix, epetra_comm);
+  eigen_solver.SolveIfpack(stiffness_matrix, mass_matrix, epetra_comm);
 
   // Call finalize for parallel (MPI prints an angry error message without this call!!)
   stk::parallel_machine_finalize();

@@ -6,7 +6,8 @@
 
 class EigenSolver {
   public:
-    int Solve(Epetra_FECrsMatrix& K, Epetra_FECrsMatrix& M, Epetra_MpiComm comm);
+    int Solve(Epetra_FECrsMatrix& K, Epetra_FECrsMatrix& M, Epetra_MpiComm& comm);
+    int SolveIfpack(Epetra_FECrsMatrix& K, Epetra_FECrsMatrix& M, Epetra_MpiComm& comm);
 };
 
 #endif // EIGENSOLVER_HPP

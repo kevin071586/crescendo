@@ -1,357 +1,449 @@
 #include <EigenSolver.hpp>
+//RCP<Epetra_FECrsMatrix> K = rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
+//RCP<Epetra_FECrsMatrix> M = rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
 
-// This example computes the eigenvalues of smallest magnitude of a
-// generalized eigenvalue problem $K x = \lambda M x$, using Anasazi's
-// implementation of the block Krylov-Schur method.  It implements
-// inverse iteration using an AztecOO iterative linear solver with an
-// Ifpack preconditioner.
-//
-// Anasazi computes the smallest-magnitude eigenvalues using a
-// shift-and-invert strategy.  For simplicity, the code below uses a
-// shift of zero.  It illustrates the general pattern for using
-// Anasazi for this problem:
-//
-//   1. Construct an "operator" A such that $Az = K^{-1} M z$.
-//   2. Use Anasazi to solve $Az = \sigma z$, which is a spectral
-//      transformation of the original problem $K x = \lambda M x$.
-//   3. The eigenvalues $\lambda$ of the original problem are the
-//      inverses of the eigenvalues $\sigma$ of the transformed
-//      problem.
-//
-// The "operator A such that $A z = K^{-1} M z$" is a subclass of
-// Epetra_Operator.  The Apply method of that operator takes the
-// vector b, and computes $x = K^{-1} M b$.  It does so first by
-// applying the matrix M, and then by solving the linear system $K x =
-// M b$ for x.  Trilinos implements many different ways to solve
-// linear systems.  The example below uses an iterative linear solver
-// provided by the AztecOO package, with an Ifpack preconditioner, to
-// solve linear systems.
-
-// Include header for block Krylov-Schur solver
-#include "AnasaziBlockKrylovSchurSolMgr.hpp"
-// Include header to define basic eigenproblem Ax = \lambda*Bx
+#include "AnasaziConfigDefs.hpp"
 #include "AnasaziBasicEigenproblem.hpp"
-// Include header to provide Anasazi with Epetra adapters.  If you
-// plan to use Tpetra objects instead of Epetra objects, include
-// AnasaziTpetraAdapter.hpp instead; do analogously if you plan to use
-// Thyra objects instead of Epetra objects.
+#include "AnasaziBlockDavidsonSolMgr.hpp"
+#include "AnasaziBasicOutputManager.hpp"
 #include "AnasaziEpetraAdapter.hpp"
-// Include header for Epetra sparse matrix, Map (representation of
-// parallel distributions), and linear problem.  AztecOO uses the
-// latter to encapsulate linear systems to solve.
-#include "Epetra_Map.h"
 #include "Epetra_CrsMatrix.h"
-#include "Epetra_FECrsMatrix.h"
-#include "Epetra_LinearProblem.h"
-// Include header for AztecOO iterative linear solver, and
-// AztecOO_Operator.  The latter wraps an AztecOO solver in an
-// Epetra_Operator.
-#include "AztecOO.h"
-#include "AztecOO_Operator.h"
-// Include header for Ifpack preconditioner factory
-#include "Ifpack.h"
-// Include header for Teuchos serial dense matrix, which we use to
-// compute the eigenvectors.
-#include "Teuchos_SerialDenseMatrix.hpp"
-// Include header for the problem definition
+#include "Teuchos_CommandLineProcessor.hpp"
+
+#ifdef HAVE_MPI
+#include "Epetra_MpiComm.h"
+#include <mpi.h>
+#else
+#include "Epetra_SerialComm.h"
+#endif
+#include "Epetra_Map.h"
+
 #include "ModeLaplace2DQ2.h"
-// 
-// Include selected communicator class and map required by Epetra objects
-// #ifdef EPETRA_MPI
-#  include "Epetra_MpiComm.h"
-// #else
-// #  include "Epetra_SerialComm.h"
-// #endif // EPETRA_MPI
-// 
-// ****************************************************************************
-// BEGIN MAIN ROUTINE
-// ****************************************************************************
 
-int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetra_MpiComm Comm)
+
+int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetra_MpiComm& Comm)
 {
-  using Teuchos::RCP;
-  using Teuchos::rcp;
-  using std::cerr;
-  using std::cout;
-  using std::endl;
-  // Anasazi solvers have the following template parameters:
-  //
-  //   - Scalar: The type of dot product results.
-  //   - MV: The type of (multi)vectors.
-  //   - OP: The type of operators (functions from multivector to
-  //     multivector).  A matrix (like Epetra_CrsMatrix) is an example
-  //     of an operator; an Ifpack preconditioner is another example.
-  //
-  // Here, Scalar is double, MV is Epetra_MultiVector, and OP is
-  // Epetra_Operator.
-  typedef Epetra_MultiVector MV;
-  typedef Epetra_Operator OP;
-  typedef Anasazi::MultiVecTraits<double, MV> MVT;
-
-// #ifdef EPETRA_MPI
+// #ifdef HAVE_MPI
 //   // Initialize MPI
-//   MPI_Init (&argc, &argv);
-//   Epetra_MpiComm Comm (MPI_COMM_WORLD);
+//   //
+//   MPI_Init(&argc,&argv);
+// #endif
+// 
+//   // Create an Epetra communicator
+//   //
+// #ifdef HAVE_MPI
+//   Epetra_MpiComm Comm(MPI_COMM_WORLD);
 // #else
 //   Epetra_SerialComm Comm;
-// #endif // EPETRA_MPI
-// 
-  const int MyPID = Comm.MyPID ();
+// #endif
 
+  // Create an Anasazi output manager
   //
-  // Set up the test problem
+  Anasazi::BasicOutputManager<double> printer;
+  printer.stream(Anasazi::Errors) << Anasazi::Anasazi_Version() << std::endl << std::endl;
+
+  // Get the sorting string from the command line
   //
-
-  // Dimensionality of the spatial domain to discretize
-  const int space_dim = 2;
-
-  // Size of each of the dimensions of the (discrete) domain
-  std::vector<double> brick_dim (space_dim);
-  brick_dim[0] = 1.0;
-  brick_dim[1] = 1.0;
-
-  // Number of elements in each of the dimensions of the domain
-  std::vector<int> elements (space_dim);
-  elements[0] = 10;
-  elements[1] = 10;
-
-  // Create the test problem
-  RCP<ModalProblem> testCase =
-    rcp (new ModeLaplace2DQ2 (Comm, brick_dim[0], elements[0],
-                              brick_dim[1], elements[1]));
-
-  // Get the stiffness and mass matrices.
-  //
-  // rcp (T*, false) returns a nonowning (doesn't deallocate) RCP.
-  // RCP<Epetra_CrsMatrix> K = 
-  //   rcp (const_cast<Epetra_CrsMatrix* > (testCase->getStiffness ()), false);
-  // RCP<Epetra_CrsMatrix> M = 
-  //   rcp (const_cast<Epetra_CrsMatrix*> (testCase->getMass ()), false);
- 
-  RCP<Epetra_FECrsMatrix> K = rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
-  RCP<Epetra_FECrsMatrix> M = rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
+  std::string which("SM");
+  Teuchos::CommandLineProcessor cmdp(false,true);
+//   cmdp.setOption("sort",&which,"Targetted eigenvalues (SM or LM).");
+//   if (cmdp.parse(argc,argv) != Teuchos::CommandLineProcessor::PARSE_SUCCESSFUL) {
+// #ifdef HAVE_MPI
+//     MPI_Finalize();
+// #endif
+//     return -1;
+//   }
+//
+//  //
+//  // Number of dimension of the domain
+//  const int space_dim = 2;
+//
+//  //
+//  // Size of each of the dimensions of the domain
+//  std::vector<double> brick_dim( space_dim );
+//  brick_dim[0] = 1.0;
+//
+//  brick_dim[1] = 1.0;
+//
+//  //
+//  // Number of elements in each of the dimensions of the domain
+//  std::vector<int> elements( space_dim );
+//  elements[0] = 10;
+//  elements[1] = 10;
+//
+//  //
+//  // get test problem
+//  Teuchos::RCP<ModalProblem> testCase = 
+//    Teuchos::rcp( new ModeLaplace2DQ2(Comm, brick_dim[0], elements[0], brick_dim[1], elements[1]) );
+//
+//   //
+//   // Get the stiffness and mass matrices from the test problem
+//   Teuchos::RCP<Epetra_CrsMatrix> K = Teuchos::rcp( const_cast<Epetra_CrsMatrix *>(testCase->getStiffness()), false );
+//   Teuchos::RCP<Epetra_CrsMatrix> M = Teuchos::rcp( const_cast<Epetra_CrsMatrix *>(testCase->getMass()), false );
   
+  Teuchos::RCP<Epetra_FECrsMatrix> K = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
+  Teuchos::RCP<Epetra_FECrsMatrix> M = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
+
+  //************************************
+  // Call the Block Davidson solver manager
+  //***********************************
   //
-  // Create linear solver for linear systems with K
+  //  Variables used for the Block Davidson Method
   //
-  // Anasazi uses shift and invert, with a "shift" of zero, to find
-  // the eigenvalues of least magnitude.  In this example, we
-  // implement the "invert" part of shift and invert by using an
-  // AztecOO iterative linear solver with an Ifpack preconditioner.
+  const int    nev         = 8; //10;
+  const int    blockSize   = 9; //10;
+  const int    numBlocks   = 4; //4;
+  const int    maxRestarts = 100;
+  const double tol         = 1.0e-8;
+
+  typedef Epetra_MultiVector MV;
+  typedef Epetra_Operator OP;
+  typedef Anasazi::MultiVecTraits<double, Epetra_MultiVector> MVT;
+
+  // Create an Epetra_MultiVector for an initial vector to start the solver.
+  // Note:  This needs to have the same number of columns as the blocksize.
   //
+  Teuchos::RCP<Epetra_MultiVector> ivec = Teuchos::rcp( new Epetra_MultiVector(K->OperatorDomainMap(), blockSize) );
+  ivec->Random();
 
+  // Create the eigenproblem.
   //
-  // Construct Ifpack preconditioner
+  Teuchos::RCP<Anasazi::BasicEigenproblem<double, MV, OP> > MyProblem =
+    Teuchos::rcp( new Anasazi::BasicEigenproblem<double, MV, OP>(K, M, ivec) );
+
+  // Inform the eigenproblem that the operator A is symmetric
   //
-
-  // An Ifpack "factory" knows how to create Ifpack preconditioners.
-  Ifpack Factory;
-
-  // Use the Factory to create the preconditioner.  Factory.Create()
-  // returns a raw Ifpack2_Preconditioner pointer.  The caller (that's
-  // us!) is responsible for deallocation, so we use an owning RCP to
-  // deallocate it automatically.
-  //
-  // The Factory needs a string name of the preconditioner, and the
-  // overlap level.  (Almost) all Ifpack preconditioners are local to
-  // each MPI process.  Ifpack automatically does an additive Schwarz
-  // decomposition across processes.  The default overlap level for
-  // additive Schwarz is zero, but you can use a different overlap
-  // level here if you want.  The overlap level must be nonnegative,
-  // and only matters if running with more than one MPI process.
-  std::string PrecType = "ICT"; // incomplete Cholesky
-  const int OverlapLevel = 0;
-  // Create the preconditioner.
-  RCP<Ifpack_Preconditioner> Prec =
-    rcp (Factory.Create (PrecType, &*K, OverlapLevel));
-  if (Prec.is_null ()) {
-    throw std::logic_error ("Ifpack's factory returned a NULL preconditioner!");
-  }
-
-  //
-  // Set Ifpack preconditioner parameters.
-  //
-  // Set parameters after creating the preconditioner.  Please refer
-  // to Ifpack's documentation for a list of valid parameters.
-  //
-  Teuchos::ParameterList ifpackList;
-  ifpackList.set ("fact: drop tolerance", 1e-4);
-  ifpackList.set ("fact: ict level-of-fill", 0.0);
-  // The "combine mode" describes how to combine contributions from
-  // other MPI processes.  It only matters if the overlap level is
-  // nonzero.  See Epetra_CombineMode.h for documentation of of the
-  // various combine modes.
-  ifpackList.set ("schwarz: combine mode", "Add");
-
-  // Set the parameters.
-  IFPACK_CHK_ERR(Prec->SetParameters(ifpackList));
-
-  // Initialize the preconditioner.  This only looks at the structure
-  // of the matrix, not the values.  Nevertheless, the matrix must
-  // generally be fill complete at this point.  Compare Initialize()
-  // to a symbolic factorization, and Compute() (see below) to a
-  // numeric factorization.
-  IFPACK_CHK_ERR(Prec->Initialize());
-
-  // Compute the preconditioner.  This looks at both the structure and
-  // the values of the matrix.  Compare Initialize() (see above) to a
-  // symbolic factorization, and Compute() (see below) to a numeric
-  // factorization.
-  Prec->Print(std::cout);
-  IFPACK_CHK_ERR(Prec->Compute());
-
-  //
-  // Set up AztecOO iterative solver for solving linear systems with K.
-  //
-
-  // Create Epetra linear problem class for solving linear systems
-  // with K.  This implements the inverse operator for shift and
-  // invert.
-  Epetra_LinearProblem precProblem;
-  // Tell the linear problem about the matrix K.  Epetra_LinearProblem
-  // doesn't know about RCP, so we have to give it a raw pointer.
-  precProblem.SetOperator (K.getRawPtr ());
-
-  // Create AztecOO iterative solver for solving linear systems with K.
-  AztecOO precSolver (precProblem);
-  // Tell the solver to use the Ifpack preconditioner we created above.
-  precSolver.SetPrecOperator (Prec.get ());
-  // Set AztecOO solver options.
-  precSolver.SetAztecOption (AZ_output, AZ_none); // Don't print output
-  precSolver.SetAztecOption (AZ_solver, AZ_cg); // Use CG
-
-  // Use the above AztecOO solver to create the AztecOO_Operator.
-  // This is the place where we tell the AztecOO solver the maximum
-  // number of iterations (here, we use the matrix dimension; in
-  // practice, you'll want a smaller number) and the convergence
-  // tolerance (here, 1e-12).
-  RCP<AztecOO_Operator> precOperator =
-    rcp (new AztecOO_Operator (&precSolver, K->NumGlobalRows (), 1e-12));
-
-   // Create an Operator that computes y = K^{-1} M x.
-   //
-   // This Operator object is the operator we give to Anasazi.  Thus,
-   // Anasazi just sees an operator that computes y = K^{-1} M x.  The
-   // matrix K got absorbed into precOperator via precProblem (the
-   // Epetra_LinearProblem object).  Later, when we set up the Anasazi
-   // eigensolver, we will need to tell it about M, so that it can
-   // orthogonalize basis vectors with respect to the inner product
-   // defined by M (since it is symmetric positive definite).
-   RCP<Anasazi::EpetraGenOp> Aop = rcp (new Anasazi::EpetraGenOp (precOperator, M));
-
-  //
-  // Set parameters for the block Krylov-Schur eigensolver
-  //
-
-  double tol = 1.0e-8;
-  int nev = 10;
-  int blockSize = 3;
-  int numBlocks = 3 * nev / blockSize;
-  int maxRestarts = 10;
-
-  // We're looking for the largest-magnitude eigenvalues of the
-  // _inverse_ operator, thus, the smallest-magnitude eigenvalues of
-  // the original operator.
-  std::string which = "LM";
-  int verbosity = Anasazi::Errors + Anasazi::Warnings + Anasazi::FinalSummary;
-
-  // Create ParameterList to pass into eigensolver
-  Teuchos::ParameterList MyPL;
-  MyPL.set ("Verbosity", verbosity);
-  MyPL.set ("Which", which);
-  MyPL.set ("Block Size", blockSize);
-  MyPL.set ("Num Blocks", numBlocks);
-  MyPL.set ("Maximum Restarts", maxRestarts);
-  MyPL.set ("Convergence Tolerance", tol);
-
-  // Create an initial set of vectors to start the eigensolver.  Note:
-  // This needs to have the same number of columns as the block size.
-  RCP<MV> ivec = rcp (new MV (K->Map (), blockSize));
-  MVT::MvRandom (*ivec);
-
-  // This object holds all the stuff about your problem that Anasazi
-  // will see.
-  //
-  // Anasazi only needs M so that it can orthogonalize basis vectors
-  // with respect to the M inner product.  Wouldn't it be nice if
-  // Anasazi didn't require M in two different places?  Alas, this is
-  // not currently the case.
-  RCP<Anasazi::BasicEigenproblem<double,MV,OP> > MyProblem =
-    rcp (new Anasazi::BasicEigenproblem<double,MV,OP> (Aop, M, ivec));
-
-  // Tell the eigenproblem that the matrix pencil (K,M) is symmetric.
-  MyProblem->setHermitian (true);
+  MyProblem->setHermitian(true);
 
   // Set the number of eigenvalues requested
-  MyProblem->setNEV (nev);
+  //
+  MyProblem->setNEV( nev );
 
-  // Tell the eigenproblem that you are finished passing it information.
+  // Inform the eigenproblem that you are finishing passing it information
+  //
   bool boolret = MyProblem->setProblem();
   if (boolret != true) {
-    if (MyPID == 0) {
-      cout << "Anasazi::BasicEigenproblem::setProblem() returned with error." << endl;
-    }
-    MPI_Finalize();
+    printer.print(Anasazi::Errors,"Anasazi::BasicEigenproblem::setProblem() returned an error.\n");
+// #ifdef HAVE_MPI
+//     MPI_Finalize();
+// #endif
     return -1;
   }
 
-  // Create the Block Krylov-Schur eigensolver.
-  Anasazi::BlockKrylovSchurSolMgr<double, MV, OP> MySolverMgr (MyProblem, MyPL);
-
-  // Solve the eigenvalue problem.
+  // Create parameter list to pass into the solver manager
   //
-  // Note that creating the eigensolver is separate from solving it.
-  // After creating the eigensolver, you may call solve() multiple
-  // times with different parameters or initial vectors.  This lets
-  // you reuse intermediate state, like allocated basis vectors.
-  Anasazi::ReturnType returnCode = MySolverMgr.solve ();
-  if (returnCode != Anasazi::Converged && MyPID == 0) {
-    cout << "Anasazi::EigensolverMgr::solve() returned unconverged." << endl;
-  }
+  Teuchos::ParameterList MyPL;
+  MyPL.set( "Which", which );
+  MyPL.set( "Block Size", blockSize );
+  MyPL.set( "Num Blocks", numBlocks );
+  MyPL.set( "Maximum Restarts", maxRestarts );
+  MyPL.set( "Convergence Tolerance", tol );
+  //
+  // Create the solver manager
+  Anasazi::BlockDavidsonSolMgr<double, MV, OP> MySolverMan(MyProblem, MyPL);
 
-  // Get the eigenvalues and eigenvectors from the eigenproblem.
-  Anasazi::Eigensolution<double,MV> sol = MyProblem->getSolution ();
-  // Anasazi returns eigenvalues as Anasazi::Value, so that if
-  // Anasazi's Scalar type is real-valued (as it is in this case), but
-  // some eigenvalues are complex, you can still access the
-  // eigenvalues correctly.  In this case, there are no complex
-  // eigenvalues, since the matrix pencil is symmetric.
+  // Solve the problem
+  //
+  Anasazi::ReturnType returnCode = MySolverMan.solve();
+
+  // Get the eigenvalues and eigenvectors from the eigenproblem
+  //
+  Anasazi::Eigensolution<double,MV> sol = MyProblem->getSolution();
   std::vector<Anasazi::Value<double> > evals = sol.Evals;
   Teuchos::RCP<MV> evecs = sol.Evecs;
-  int numev = sol.numVecs;
 
-  if (numev > 0) {
-    // Reconstruct the eigenvalues.  The ones that Anasazi gave back
-    // are the inverses of the original eigenvalues.  Reconstruct the
-    // eigenvectors too.
-    Teuchos::SerialDenseMatrix<int,double> dmatr(numev,numev);
-    MV tempvec (K->Map (), MVT::GetNumberVecs (*evecs));
-    K->Apply (*evecs, tempvec);
-    MVT::MvTransMv (1.0, tempvec, *evecs, dmatr);
-
-    if (MyPID == 0) {
-      double compeval = 0.0;
-      cout.setf (std::ios_base::right, std::ios_base::adjustfield);
-      cout << "Actual Eigenvalues (obtained by Rayleigh quotient) : " << endl;
-      cout << "----------------------------------------------// --------" << endl;
-      cout << std::setw(16) << "Real Part"                   // 
-           << std::setw(16) << "Rayleigh Error" << endl;     // 
-      cout << "----------------------------------------------// --------" << endl;
-      for (int i = 0; i < numev; ++i) {                      // 
-        compeval = dmatr(i,i);
-        cout << std::setw(16) << compeval
-             << std::setw(16)
-             << std::fabs (compeval - 1.0/evals[i].realpart)
-             << endl;
-      }
-      cout << "------------------------------------------------------" << endl;
+  // Compute residuals.
+  //
+  std::vector<double> normR(sol.numVecs);
+  if (sol.numVecs > 0) {
+    Teuchos::SerialDenseMatrix<int,double> T(sol.numVecs, sol.numVecs);
+    Epetra_MultiVector Kvec( K->OperatorDomainMap(), evecs->NumVectors() );
+    Epetra_MultiVector Mvec( M->OperatorDomainMap(), evecs->NumVectors() );
+    T.putScalar(0.0); 
+    for (int i=0; i<sol.numVecs; i++) {
+      T(i,i) = evals[i].realpart;
     }
-
+    K->Apply( *evecs, Kvec );  
+    M->Apply( *evecs, Mvec );  
+    MVT::MvTimesMatAddMv( -1.0, Mvec, T, 1.0, Kvec );
+    MVT::MvNorm( Kvec, normR );
   }
-// 
-// #ifdef EPETRA_MPI
-//   MPI_Finalize ();
-// #endif // EPETRA_MPI
-// 
+
+  // Print the results
+  //
+  std::ostringstream os;
+  os.setf(std::ios_base::right, std::ios_base::adjustfield);
+  os<<"Solver manager returned " << (returnCode == Anasazi::Converged ? "converged." : "unconverged.") << std::endl;
+  os<<std::endl;
+  os<<"------------------------------------------------------"<<std::endl;
+  os<<std::setw(16)<<"Eigenvalue"
+    <<std::setw(18)<<"Direct Residual"
+    <<std::endl;
+  os<<"------------------------------------------------------"<<std::endl;
+  for (int i=0; i<sol.numVecs; i++) {
+    os<<std::setw(16)<<evals[i].realpart
+      <<std::setw(18)<<normR[i]/evals[i].realpart
+      <<std::endl;
+  }
+  os<<"------------------------------------------------------"<<std::endl;
+  printer.print(Anasazi::Errors,os.str());
+
+// #ifdef HAVE_MPI
+//   MPI_Finalize();
+// #endif
   return 0;
 }
+
+// Include header for Ifpack incomplete Cholesky preconditioner
+#include "Ifpack.h"
+#include "Epetra_InvOperator.h"
+
+int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetra_MpiComm& Comm) {
+  using namespace Anasazi;
+
+
+// #ifdef HAVE_MPI
+//   // Initialize MPI
+//   MPI_Init(&argc,&argv);
+// #endif
+// 
+//   // Create an Epetra communicator
+// #ifdef HAVE_MPI
+//   Epetra_MpiComm Comm(MPI_COMM_WORLD);
+// #else
+//   Epetra_SerialComm Comm;
+// #endif
+
+  //************************************
+  // Get the parameters from the command line
+  //************************************
+  //
+  int    nev       = 10;
+  int    blockSize = 10;
+  int    numBlocks   = 3; //4;
+  int    maxRestarts = 100; 
+  double tol       = 1.0e-8;
+  int numElements = 10;     
+  bool verbose = false;    
+  std::string which("SM");  
+  bool usePrec = true;      
+  double prec_dropTol = 1e-4;
+  int prec_lofill = 0;
+  Teuchos::CommandLineProcessor cmdp(false,true);
+  cmdp.setOption("nev",&nev,"Number of eigenpairs to compted.");
+  cmdp.setOption("blockSize",&blockSize,"Block size.");
+  cmdp.setOption("numBlocks",&numBlocks,"Number of blocks in basis.");
+  cmdp.setOption("maxRestarts",&maxRestarts,"Maximum number of restarts.");
+  cmdp.setOption("tol",&tol,"Relative convergence tolerance.");
+  cmdp.setOption("numElements",&numElements,"Number of elements in the discretization.");
+  cmdp.setOption("verbose","quiet",&verbose,"Print messages and results.");
+  cmdp.setOption("sort",&which,"Targetted eigenvalues (SM or LM).");
+  cmdp.setOption("usePrec","noPrec",&usePrec,"Use Ifpack for preconditioning.");
+  cmdp.setOption("prec_dropTol",&prec_dropTol,"Preconditioner: drop tolerance.");
+  cmdp.setOption("prec_lofill",&prec_lofill,"Preconditioner: level of fill.");
+//   if (cmdp.parse(argc,argv) != Teuchos::CommandLineProcessor::PARSE_SUCCESSFUL) {
+// #ifdef HAVE_MPI
+//     MPI_Finalize();
+// #endif
+//     return -1;
+//   }
+
+
+
+  //************************************
+  // Create an Anasazi output manager
+  //************************************
+  //
+  // Set verbosity level
+  int verbosity = Anasazi::Errors + Anasazi::Warnings;
+  if (verbose) {
+    verbosity += Anasazi::FinalSummary + Anasazi::TimingDetails;
+  }
+  BasicOutputManager<double> printer(verbosity);
+  printer.stream(Errors) << Anasazi_Version() << std::endl << std::endl;
+
+  //************************************
+  // Some useful typedefs
+  //************************************
+  //
+  typedef Epetra_MultiVector MV;
+  typedef Epetra_Operator OP;
+  typedef MultiVecTraits<double, Epetra_MultiVector> MVT;
+
+  // //************************************
+  // // Create the problem matrices
+  // //************************************
+  // //
+  // printer.stream(Errors) << "Generating problem matrices..." << std::flush;
+  // // Number of dimension of the domain
+  // const int space_dim = 2;
+  // // Size of each of the dimensions of the domain
+  // std::vector<double> brick_dim( space_dim );
+  // brick_dim[0] = 1.0;
+  // brick_dim[1] = 1.0;
+  // // Number of elements in each of the dimensions of the domain
+  // std::vector<int> elements( space_dim );
+  // elements[0] = numElements;
+  // elements[1] = numElements;
+  // // Create problem
+  // Teuchos::RCP<ModalProblem> testCase =
+  //   Teuchos::rcp( new ModeLaplace2DQ2(Comm, brick_dim[0], elements[0], brick_dim[1], elements[1]) );
+  // // Get the stiffness and mass matrices
+  // Teuchos::RCP<Epetra_CrsMatrix> K = Teuchos::rcp( const_cast<Epetra_CrsMatrix *>(testCase->getStiffness()), false );
+  // Teuchos::RCP<Epetra_CrsMatrix> M = Teuchos::rcp( const_cast<Epetra_CrsMatrix *>(testCase->getMass()), false );
+  
+  Teuchos::RCP<Epetra_FECrsMatrix> K = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
+  Teuchos::RCP<Epetra_FECrsMatrix> M = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
+
+  // tell the user that we're done
+  printer.stream(Errors) << " done." << std::endl;
+
+
+  //************************************
+  // Select the Preconditioner
+  //************************************
+  //
+  Teuchos::RCP<Ifpack_Preconditioner> prec;
+  Teuchos::RCP<Epetra_Operator> PrecOp;
+  if (usePrec) {
+    printer.stream(Errors) << "Constructing Incomplete Cholesky preconditioner..." << std::flush;
+    Ifpack precFactory;
+    // additive-Schwartz incomplete Cholesky with thresholding; see IFPACK documentation
+    std::string precType = "IC stand-alone";
+    int overlapLevel = 0;
+    prec = Teuchos::rcp( precFactory.Create(precType,K.get(),overlapLevel) );
+    // parameters for preconditioner
+    Teuchos::ParameterList precParams;
+    precParams.set("fact: drop tolerance",prec_dropTol);
+    precParams.set("fact: level-of-fill",prec_lofill);
+    IFPACK_CHK_ERR(prec->SetParameters(precParams));
+    IFPACK_CHK_ERR(prec->Initialize());
+    IFPACK_CHK_ERR(prec->Compute());
+    //
+    printer.stream(Errors)
+      << " done." << std::endl;
+    // encapsulate this preconditioner into a IFPACKPrecOp class
+    PrecOp = Teuchos::rcp( new Epetra_InvOperator(&*prec) );
+  }
+
+
+  //************************************
+  // Call the BlockDavidson solver manager
+  //***********************************
+  // Create an Epetra_MultiVector for an initial vector to start the solver.
+  // Note:  This needs to have the same number of columns as the blocksize.
+  //
+  Teuchos::RCP<Epetra_MultiVector> ivec
+    = Teuchos::rcp( new Epetra_MultiVector(K->OperatorDomainMap(), blockSize) );
+  ivec->Random();
+  // Create the eigenproblem.
+  //
+  Teuchos::RCP<BasicEigenproblem<double, MV, OP> > MyProblem =
+    Teuchos::rcp( new BasicEigenproblem<double, MV, OP>(K, M, ivec) );
+  // Inform the eigenproblem that the operator K is symmetric
+  //
+  MyProblem->setHermitian(true);
+  // Pass the preconditioner to the eigenproblem
+  //
+  if (usePrec) {
+    MyProblem->setPrec(PrecOp);
+  }
+  // Set the number of eigenvalues requested
+  //
+  MyProblem->setNEV( nev );
+  // Inform the eigenproblem that you are finishing passing it information
+  //
+  bool boolret = MyProblem->setProblem();
+  if (boolret != true) {
+    printer.print(Errors,"Anasazi::BasicEigenproblem::setProblem() returned an error.\n");
+#ifdef HAVE_MPI
+    MPI_Finalize();
+#endif
+    return -1;
+  }
+
+
+  //************************************
+  // Create parameter list to pass into the solver manager
+  //************************************
+  //
+  Teuchos::ParameterList MyPL;
+  MyPL.set( "Verbosity", verbosity );
+  MyPL.set( "Which", which );
+  MyPL.set( "Block Size", blockSize );
+  MyPL.set( "Num Blocks", numBlocks );
+  MyPL.set( "Maximum Restarts", maxRestarts );
+  MyPL.set( "Convergence Tolerance", tol );
+  //
+  // Create the solver manager
+  BlockDavidsonSolMgr<double, MV, OP> MySolverMan(MyProblem, MyPL);
+
+
+  //************************************
+  // Solve the problem
+  //************************************
+  //
+  printer.stream(Errors) << "Solving eigenvalue problem..." << std::endl;
+  ReturnType returnCode = MySolverMan.solve();
+  // print some precond info
+  if (usePrec) {
+    printer.stream(FinalSummary) << *prec << std::endl;
+  }
+
+
+  //************************************
+  // Get the eigenvalues and eigenvectors from the eigenproblem
+  //************************************
+  //
+  Eigensolution<double,MV> sol = MyProblem->getSolution();
+  std::vector<Value<double> > evals = sol.Evals;
+  Teuchos::RCP<MV> evecs = sol.Evecs;
+
+
+  //************************************
+  // Compute residuals, just for funsies
+  //************************************
+  //
+  std::vector<double> normR(sol.numVecs);
+  if (sol.numVecs > 0) {
+    Teuchos::SerialDenseMatrix<int,double> T(sol.numVecs, sol.numVecs);
+    Epetra_MultiVector Kvec( K->OperatorDomainMap(), evecs->NumVectors() );
+    Epetra_MultiVector Mvec( M->OperatorDomainMap(), evecs->NumVectors() );
+    T.putScalar(0.0);
+    for (int i=0; i<sol.numVecs; i++) {
+      T(i,i) = evals[i].realpart;
+    }
+    K->Apply( *evecs, Kvec );
+    M->Apply( *evecs, Mvec );
+    MVT::MvTimesMatAddMv( -1.0, Mvec, T, 1.0, Kvec );
+    MVT::MvNorm( Kvec, normR );
+  }
+
+
+  //************************************
+  // Print the results
+  //************************************
+  //
+  std::ostringstream os;
+  os.setf(std::ios_base::right, std::ios_base::adjustfield);
+  os<<"Solver manager returned " << (returnCode == Converged ? "converged." : "unconverged.") << std::endl;
+  os<<std::endl;
+  os<<"------------------------------------------------------"<<std::endl;
+  os<<std::setw(16)<<"Eigenvalue"
+    <<std::setw(18)<<"Direct Residual"
+    <<std::endl;
+  os<<"------------------------------------------------------"<<std::endl;
+  for (int i=0; i<sol.numVecs; i++) {
+    os<<std::setw(16)<<evals[i].realpart
+      <<std::setw(18)<<normR[i]/evals[i].realpart
+      <<std::endl;
+  }
+  os<<"------------------------------------------------------"<<std::endl;
+  printer.print(Errors,os.str());
+
+// #ifdef HAVE_MPI
+//   MPI_Finalize();
+// #endif
+  return 0;
+}
+
