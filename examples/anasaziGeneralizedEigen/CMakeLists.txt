@@ -1,8 +1,7 @@
 CMAKE_MINIMUM_REQUIRED( VERSION 2.6 )
 
 PROJECT( MyApp )
-# SET(CMAKE_BUILD_TYPE Release )
-SET(CMAKE_BUILD_TYPE Debug )
+SET(CMAKE_BUILD_TYPE Release )
 
 # Get Trilinos as one entity
 FIND_PACKAGE(Trilinos PATHS /home/kevin/code/my_trilinos/install/lib/cmake/ NO_DEFAULT_PATH REQUIRED)
@@ -44,32 +43,10 @@ SET(CMAKE_Fortran_FLAGS  "${Trilinos_Fortran_COMPILER_FLAGS} ${CMAKE_Fortran_FLA
 #    3) Linking instructions
 #    4) Executables
 #------------------------------------
-SET(CRESCENDO_DIR "/home/kevin/code/crescendo")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CRESCENDO_DIR}/bin)
-
-INCLUDE_DIRECTORIES(${Trilinos_INCLUDE_DIRS} 
-  ${Trilinos_TPL_INCLUDE_DIRS}
-  ${CRESCENDO_DIR}/include
-  )
-
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Print out include directories:
-#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
-# foreach(dir ${dirs})
-#   message(STATUS "dir='${dir}'")
-# endforeach()
-
+INCLUDE_DIRECTORIES(${Trilinos_INCLUDE_DIRS} ${Trilinos_TPL_INCLUDE_DIRS})
 LINK_DIRECTORIES(${Trilinos_LIBRARY_DIRS} ${Trilinos_TPL_LIBRARY_DIRS})
-
 LINK_LIBRARIES(${Trilinos_LIBRARIES})
-
-ADD_EXECUTABLE( crescendo 
-  ${CRESCENDO_DIR}/src/crescendo.cpp
-  ${CRESCENDO_DIR}/src/integrateMatrices.cpp
-  ${CRESCENDO_DIR}/src/ElasticMaterial.cpp
-  ${CRESCENDO_DIR}/src/EigenSolver.cpp
-  )
+ADD_EXECUTABLE( main BlockKrylovSchurEpetraExGenAztecOO.cpp )
 
 
 
