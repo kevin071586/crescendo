@@ -183,6 +183,11 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
   for (int i=0; i<numev; ++i) {
     compEvals[i] = evals[i].realpart + sigma;
   }
+
+  // Assign result as public member variable
+  m_eigen_values = &compEvals;
+  m_eigen_vectors = sol.Evecs;
+
   //===========================================================
 
   // Compute residuals.

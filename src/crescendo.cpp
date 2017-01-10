@@ -6,6 +6,7 @@
 #include <stk_mesh/base/Entity.hpp>             // for EntityRank
 #include <stk_mesh/base/GetEntities.hpp>        // for get_entities
 #include "stk_mesh/base/Field.hpp"              // for Field
+#include "stk_mesh/base/FieldParallel.hpp"      // for communicate_field_data
 #include <stk_mesh/base/FieldBase.hpp>          // for field_data, FieldBase
 #include <stk_mesh/base/MetaData.hpp>           // for MetaData
 #include "stk_mesh/base/Types.hpp"              // for BucketVector
@@ -24,6 +25,7 @@
 #include <Epetra_Map.h>
 #include <Epetra_MpiComm.h>
 // #include <Epetra_Vector.h>
+#include <Epetra_MultiVector.h>
 #include <Epetra_FECrsMatrix.h>
 #include <EpetraExt_RowMatrixOut.h>
  
@@ -68,8 +70,8 @@ int main(int argc, char** argv) {
   // Define the input file
   std::string dbtype("exodusII");
   //std::string in_filename("two_hex8_elements.g");
-  std::string in_filename("test_2elem.g");
-  //std::string in_filename("hex8_10x10x10.g");
+  // std::string in_filename("test_2elem.g");
+  std::string in_filename("hex8_10x10x10.g");
 
   // --------------------------------------------------------------------------
   //
@@ -85,9 +87,32 @@ int main(int argc, char** argv) {
   stkMeshIoBroker.create_input_mesh();
   stk::mesh::MetaData &stkMeshMetaData = stkMeshIoBroker.meta_data();
 
+  // Define the output mesh
+  std::string out_filename("output.e");
+  size_t exo_out = stkMeshIoBroker.create_output_mesh(out_filename, stk::io::WRITE_RESULTS);
+
+  // Define global fields
+  std::string global_field_freq = "EigenFrequency";
+  stkMeshIoBroker.add_global(exo_out, global_field_freq, Ioss::Field::REAL);
+
+  // Define node fields
+  typedef stk::mesh::Field<double> ScalarField;
+  typedef stk::mesh::Field<double, stk::mesh::Cartesian3d> VectorField;
+
+  VectorField& displacementsField =
+    stkMeshMetaData.declare_field<VectorField>(stk::topology::NODE_RANK, "displacements");
+  stk::mesh::put_field_on_entire_mesh(displacementsField);
+  
+  ScalarField& temperatureField = 
+    stkMeshMetaData.declare_field<ScalarField>(stk::topology::NODE_RANK, "temperature");
+  stk::mesh::put_field_on_entire_mesh(temperatureField);
+
   // Populate/read in the bulk mesh data
   stkMeshIoBroker.populate_bulk_data(); 
   stk::mesh::BulkData &stkMeshBulkData = stkMeshIoBroker.bulk_data();
+
+  stkMeshIoBroker.add_field(exo_out, displacementsField, "displ");
+  stkMeshIoBroker.add_field(exo_out, temperatureField);
 
   // Select local processor part (includes elements/nodes/etc.)
   stk::mesh::Selector localSelector = stkMeshMetaData.locally_owned_part();
@@ -380,6 +405,57 @@ int main(int argc, char** argv) {
   EigenSolver eigen_solver; 
   eigen_solver.Solve(stiffness_matrix, mass_matrix, epetra_comm);
   //eigen_solver.SolveIfpack(stiffness_matrix, mass_matrix, epetra_comm);
+
+  // Write output mesh
+  std::vector<double> freqs = *(eigen_solver.m_eigen_values);
+  //std::sort(freqs.begin(), freqs.end());
+  // for (int i = 0; i < freqs.size(); ++i) {
+  //   double freq = freqs[i];
+  //   stkMeshIoBroker.begin_output_step(exo_out, freq);
+  //   stkMeshIoBroker.write_global(exo_out, global_field_freq, freq);
+  //   stkMeshIoBroker.end_output_step(exo_out);
+  // }
+
+  // Get associated Eigenvector
+  int num_evecs = freqs.size();
+  Epetra_MultiVector evecs = *eigen_solver.m_eigen_vectors;
+  std::vector<double> evecs_data;
+  evecs_data.reserve(num_evecs*num_local_DOF);
+  evecs.ExtractCopy(&evecs_data[0], num_local_DOF);
+  std::cout << "Epetra_MV Num Vectors: " << evecs.NumVectors() << std::endl;
+  std::cout << "Epetra_MV My Length:   " << evecs.MyLength() << std::endl;
+
+  std::vector<const stk::mesh::FieldBase*> field_list(1, &displacementsField);
+  // field_list.reserve(2);
+  // field_list[0] = &temperatureField;
+  // field_list[1] = &displacementsField;
+
+  for (int i = 0; i < freqs.size(); ++i) {
+    stkMeshIoBroker.begin_output_step(exo_out, freqs[i]);
+    for (size_t bucketIndex = 0; bucketIndex < node_buckets.size(); ++bucketIndex) {
+      stk::mesh::Bucket &node_bucket = *node_buckets[bucketIndex];
+      double* displacementDataForBucket = stk::mesh::field_data(displacementsField, node_bucket);
+      
+      for (size_t node_index = 0; node_index < node_bucket.size(); ++node_index) {
+        //displacementDataForBucket = &evecs_data[i*freqs.size()];
+        stk::mesh::Entity node = node_bucket[node_index];
+        int local_id = stkMeshBulkData.local_id(node);
+        displacementDataForBucket[spatialDim*node_index + 0] = evecs_data[0 + spatialDim*local_id + i*num_local_DOF];
+        displacementDataForBucket[spatialDim*node_index + 1] = evecs_data[1 + spatialDim*local_id + i*num_local_DOF];
+        displacementDataForBucket[spatialDim*node_index + 2] = evecs_data[2 + spatialDim*local_id + i*num_local_DOF];
+      }
+    }
+
+    // Send field data for shared nodes across to the other processors.
+    // This communication is necessary to ensure that we don't get a 
+    // bunch of zeros on nodes which are shared (but not owned).  This
+    // must come before any write commands.
+    stk::mesh::communicate_field_data(stkMeshBulkData, field_list);
+
+    // Write the output step to disk.
+    stkMeshIoBroker.write_defined_output_fields(exo_out);
+    stkMeshIoBroker.end_output_step(exo_out);
+  }
 
   // Call finalize for parallel (MPI prints an angry error message without this call!!)
   stk::parallel_machine_finalize();
