@@ -43,6 +43,7 @@
 #include <integrateMatrices.hpp>
 #include <ElasticMaterial.hpp>
 #include <EigenSolver.hpp>
+#include <Parser.h>
 
 using namespace Intrepid;
 typedef FunctionSpaceTools fst;
@@ -70,8 +71,8 @@ int main(int argc, char** argv) {
   // Define the input file
   std::string dbtype("exodusII");
   //std::string in_filename("two_hex8_elements.g");
-  // std::string in_filename("test_2elem.g");
-  std::string in_filename("hex8_10x10x10.g");
+  std::string in_filename("test_2elem.g");
+  // std::string in_filename("hex8_10x10x10.g");
 
   // --------------------------------------------------------------------------
   //
