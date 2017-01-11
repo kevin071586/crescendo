@@ -1,5 +1,6 @@
 # First line is a comment
 
-Param1 = Val1
-Param2 = Val2
-   Param3 = Val3
+Param1 = 15 #comment
+Param2 = 12.39e6
+   Param3 = test
+#another comment

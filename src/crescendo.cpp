@@ -58,20 +58,37 @@ namespace utility {
 // Main Program
 //
 int main(int argc, char** argv) {
+  if (argc == 1) {
+    std::cout << "Error: Must supply an input file" << std::endl;
+    return 0;
+  }
+
+  std::string fileName(argv[1]);
+  std::cout << "Input file: " << fileName << std::endl;
+
+  Parser parser(fileName);
+  parser.parse();
+
+  double rho = parser.getFieldDouble("rho");
+  double E = parser.getFieldDouble("E");
+  double nu = parser.getFieldDouble("nu");
+  std::string in_filename = parser.getFieldString("Database");
+
+
   // --------------------------------------------------------------------------
   //
   // Define model parameters
   //
   // --------------------------------------------------------------------------
   // Get elastic stiffness tensor
-  double rho = 1.0;
-  double E = 10.0;
-  double nu = 0.0;
+  // double rho = 1.0;
+  // double E = 10.0;
+  // double nu = 0.0;
 
   // Define the input file
   std::string dbtype("exodusII");
   //std::string in_filename("two_hex8_elements.g");
-  std::string in_filename("test_2elem.g");
+  // std::string in_filename("test_2elem.g");
   // std::string in_filename("hex8_10x10x10.g");
 
   // --------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <map>
 
 // Includes for trim algorithms
 #include <algorithm> 
@@ -15,6 +16,12 @@
 Parser::Parser() 
 {
 }
+
+Parser::Parser( std::string filename ) 
+{
+  m_filename = filename;
+}
+
 
 // Set input file
 // ==================================================================
@@ -32,20 +39,88 @@ void Parser::parse()
 {
   std::fstream inFile( m_filename );
   std::string line;
-
+  
+  // Read each line from the input file
   while (std::getline(inFile, line)) {
-    std::cout << trim(line) << std::endl;
-
     if (isKeyValuePair(line)) {
       std::string key, value;
       getKeyValuePair( line, key, value );
-      std::cout << "Key: " << key << ", Value: " << value << std::endl;
+      m_inputParam[key] = value;
     }
   }
   return;
 }
 
 
+// Access methods, return fields by type 
+// ==================================================================
+int Parser::getFieldInt( std::string key )
+{
+  toLower(key);
+  try {
+    return std::stoi(m_inputParam[key]);
+  }
+  catch (const std::invalid_argument& ia) {
+    std::cerr << "Invalid argument for parameter " << key
+              << ":" << ia.what() << '\n';
+  }
+  return 0;
+}
+
+int Parser::getFieldInt( std::string key, int defaultValue )
+{
+  toLower(key);
+  try {
+    return std::stoi(m_inputParam[key]);
+  }
+  catch (const std::invalid_argument& ia) {
+    std::cerr << "Invalid argument for parameter " << key
+              << ":" << ia.what() << '\n';
+  }
+  return defaultValue;
+}
+
+double Parser::getFieldDouble( std::string key )
+{
+  toLower(key);
+  try {
+    return std::stod(m_inputParam[key]);
+  }
+  catch (const std::invalid_argument& ia) {
+    std::cerr << "Invalid argument for parameter " << key
+              << ":" << ia.what() << '\n';
+  }
+  return 0.0;
+}
+
+double Parser::getFieldDouble( std::string key, double defaultValue )
+{
+  toLower(key);
+  try {
+    return std::stod(m_inputParam[key]);
+  }
+  catch (const std::invalid_argument& ia) {
+    std::cerr << "Invalid argument for parameter " << key
+              << ":" << ia.what() << '\n';
+  }
+  return defaultValue;
+}
+
+std::string Parser::getFieldString( std::string key )
+{
+  toLower(key);
+  return m_inputParam[key];
+}
+std::string Parser::getFieldString( std::string key, std::string defaultValue )
+{
+  toLower(key);
+  if ( m_inputParam.find(key) == m_inputParam.end() ) {
+    return defaultValue;
+  } 
+  else {
+    return m_inputParam[key];
+  }
+}
 
 // Check if string is in key-value pair format
 // ==================================================================
@@ -69,7 +144,11 @@ void Parser::getKeyValuePair( std::string line, std::string& key, std::string& v
       //TODO: Make sure pos+1 isnt the end of the string.
 
   trim(key);
+  stripComment(key);
+  toLower(key);
+
   trim(value);
+  stripComment(value);
   return;
 }
 
@@ -84,7 +163,6 @@ std::string& Parser::ltrim( std::string &s )
 }
 
 
-
 // Trim from end
 // ==================================================================
 std::string& Parser::rtrim( std::string &s )
@@ -95,7 +173,6 @@ std::string& Parser::rtrim( std::string &s )
 }
 
 
-
 // Trim from both ends
 // ==================================================================
 std::string& Parser::trim( std::string &s )
@@ -104,3 +181,23 @@ std::string& Parser::trim( std::string &s )
 }
 
 
+// Strip trailing comments 
+// ==================================================================
+std::string& Parser::stripComment( std::string &s )
+{
+  int pos = s.find("#");
+  if (pos == -1) {
+    return s;
+  }
+  else {
+    return s = s.substr(0, pos);
+  }
+}
+
+ 
+// Set string to lowercase for comparisons 
+// ==================================================================
+std::string& Parser::toLower( std::string &s ) {
+  std::transform(s.begin(), s.end(), s.begin(), tolower);
+  return s;
+}
