@@ -4,23 +4,22 @@
 #include <iostream>
 #include <map>
 
-// Includes for trim algorithms
-#include <algorithm> 
-#include <functional> 
-#include <cctype>
-#include <locale>
-
 #include <Parser.h>
 #include <ParserCmdBlock.h>
+#include <ParserDictionary.h>
 
 // Default constructor
 // ==================================================================
 Parser::Parser() 
 {
+  ParserCmdBlock main_block;
+  m_cmdBlocks.push_back(main_block);
 }
 
 Parser::Parser( std::string filename ) 
 {
+  ParserCmdBlock main_block;
+  m_cmdBlocks.push_back(main_block);
   m_filename = filename;
 }
 
@@ -43,7 +42,6 @@ void Parser::parse()
   std::string line;
   
   int nestingCount = 0;
-  std::vector<ParserCmdBlock> cmdBlocks;
 
   // Read each line from the input file
   while (std::getline(inFile, line)) {
@@ -51,31 +49,38 @@ void Parser::parse()
     // Read key-value pair
     if (isKeyValuePair(line)) {
       std::string key, value;
-      getKeyValuePair( line, key, value );
+      getKeyValuePair(line, key, value);
       m_inputParam[key] = value;
+
+      // Add key-value pairs to current block
+      ParserCmdBlock currBlock = m_cmdBlocks.back();
+      currBlock.addKeyValuePair(key,value);
     }
 
     // Read command blocks
     if (isCmdBlock(line)) {
       ++nestingCount;
-      ParserCmdBlock cmdBlock;
-      cmdBlocks.push_back(cmdBlock);
 
-      int pos = line.find_last_of(" ");
-      std::string blockName = line.substr( pos+1, line.length() );
-      std::cout << "Found command block: " << blockName << std::endl;
+      int posBlkStart = line.find_first_of(" ") + 1;
+      int posBlkEnd = line.find_last_of(" ");
+      std::string blockType = line.substr(posBlkStart, posBlkEnd - 6);
+      std::string blockName = line.substr(posBlkEnd+1, line.length());
+      m_parserUtil.trim(blockName);
+
+      ParserCmdBlock cmdBlock(blockType, blockName);
+      m_dictionary.isValidBlock(blockType);
+      m_cmdBlocks.push_back(cmdBlock);
     }
 
     // Leaving a command block
     if (m_parserUtil.toLower(line).find("end") == 0) {
       --nestingCount;
-      std::cout << "Leaving a command block." << std::endl;
     }
 
   }
 
-  std::cout << "Total number of command blocks: " << cmdBlocks.size() 
-    << std::endl;
+  std::cout << "Total number of command blocks: " << m_cmdBlocks.size() 
+            << std::endl;
   return;
 }
 

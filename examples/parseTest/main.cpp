@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
 
   // Dump the available output
   ParserDictionary dict;
-  dict.Print();
+  dict.print();
 
   return 0;
 }

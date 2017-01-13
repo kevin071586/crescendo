@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <ParserDictionary.h>
 #include <ParserUtil.h>
 
@@ -47,7 +48,7 @@ void ParserDictionary::addCmdBlock(std::string name,
   return;
 }
 
-// Add a command block, unlimited occurences
+// Add a command block
 // ==================================================================
 void ParserDictionary::addCmdBlock(std::string name, bool isRequired)
 {
@@ -64,7 +65,7 @@ void ParserDictionary::addCmdBlock(std::string name, bool isRequired)
 }
 
 
-// Add a command block, unlimited occurences
+// Add a command block
 // ==================================================================
 void ParserDictionary::addCmdBlockKey(std::string name, keyType type, 
                                       bool isRequired)
@@ -94,11 +95,56 @@ void ParserDictionary::addCmdBlockKey(std::string name, keyType type,
 
     // no default case
   }
+
+  lastBlock.addKey(key);
 }
+
+// Get a list of the defined command blocks
+// ==================================================================
+std::vector<std::string> ParserDictionary::getBlocks()
+{
+  std::vector<std::string> blockDefs;
+  for (int i=0; i < m_blockDefs.size(); ++i) {
+    blockDefs.push_back(m_blockDefs[i].getName());
+  }
+  return blockDefs;
+}
+
+// Get index for block metadata, given a name 
+//   Returns the index if found
+//   Returns -1 if not found.
+// ==================================================================
+int ParserDictionary::getBlockMetadataIndex(std::string name)
+{
+  std::vector<std::string> blkmd = getBlocks();
+  std::vector<std::string>::iterator it;
+  it = std::find(blkmd.begin(), blkmd.end(), name);
+  if (it != blkmd.end()) {
+    int index = it - blkmd.begin();
+    return index;
+  }
+  else {
+    return -1;
+  }
+}
+
+// Check if this block is defined in the dictionary 
+// ==================================================================
+bool ParserDictionary::isValidBlock(std::string name)
+{
+  int index = getBlockMetadataIndex(name);
+  if (index != -1) {
+    return true;
+  }
+  else {
+    return false;
+  }
+}
+
 
 // Print out available command syntax
 // ==================================================================
-void ParserDictionary::Print()
+void ParserDictionary::print()
 {
   for (int i=0; i < m_blockDefs.size(); ++i) {
     ParamBlockMetadata blk = m_blockDefs[i];

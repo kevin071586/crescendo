@@ -49,10 +49,12 @@ class ParamBlockMetadata
     std::vector<ParamKeyMetadata> getKeyInt() { return keyInt; }
     std::vector<ParamKeyMetadata> getKeyDouble() { return keyDouble; }
     std::vector<ParamKeyMetadata> getKeyString() { return keyString; }
+    std::vector<ParamKeyMetadata> getKeys() { return m_keys; }
 
     void addKeyInt(ParamKeyMetadata key) { keyInt.push_back(key); }
     void addKeyDouble(ParamKeyMetadata key) { keyDouble.push_back(key); }
     void addKeyString(ParamKeyMetadata key) { keyString.push_back(key); }
+    void addKey(ParamKeyMetadata key) { m_keys.push_back(key); }
 
   private:
     std::string m_name;
@@ -62,6 +64,7 @@ class ParamBlockMetadata
     std::vector<ParamKeyMetadata> keyInt;
     std::vector<ParamKeyMetadata> keyDouble;
     std::vector<ParamKeyMetadata> keyString;
+    std::vector<ParamKeyMetadata> m_keys;
 
 };
 
@@ -71,7 +74,9 @@ class ParserDictionary
 {
   public:
     ParserDictionary();
-    void Print();
+    void print();
+    std::vector<std::string> getBlocks();
+    bool isValidBlock(std::string name);
   
   private:
     std::vector<ParamBlockMetadata> m_blockDefs;
@@ -81,6 +86,8 @@ class ParserDictionary
     void addCmdBlock(std::string name, bool isRequired, int maxOccur);
     void addCmdBlock(std::string name, bool isRequired);
     void addCmdBlockKey(std::string name, keyType type, bool isRequired);
+
+    int getBlockMetadataIndex(std::string name);
 };
 
 

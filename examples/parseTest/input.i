@@ -10,3 +10,10 @@ end
 
 begin another command block second_block_name
 end
+
+begin finite element model test_model
+  database = test.g
+end
+
+begin solver parameters set1
+end

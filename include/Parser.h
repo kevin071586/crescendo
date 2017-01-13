@@ -3,8 +3,10 @@
 
 #include <string>
 #include <map>
+#include <vector>
 #include <ParserCmdBlock.h>
 #include <ParserUtil.h>
+#include <ParserDictionary.h>
 
 class Parser 
 {
@@ -28,9 +30,11 @@ class Parser
   private:
     std::string m_filename;
     std::map<std::string, std::string> m_inputParam;
+    ParserDictionary m_dictionary;
 
     ParserUtil m_parserUtil;
     ParserCmdBlock m_mainBlock;
+    std::vector<ParserCmdBlock> m_cmdBlocks;
     
     bool isKeyValuePair( std::string line );
     bool isCmdBlock( std::string line );
