@@ -25,9 +25,11 @@ int main(int argc, char** argv) {
   std::cout << " FakeParam:    " << parser.getFieldString("fakeparam") << std::endl;
 
   // Try to access a parameter that wasnt defined
+  std::cout << "Testings that should fail: " << std::endl;
   parser.getFieldInt("doesntExist");
   parser.getFieldDouble("doesntExist");
   parser.getFieldString("doesntExist");
+  std::cout << std::endl;
 
   // Build a ParserUtil object and use a method to make sure it doesnt fail
   ParserUtil m_parserUtil;

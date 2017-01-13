@@ -11,14 +11,24 @@
 class ParamKeyMetadata
 {
   public:
+    enum keyType
+    {
+      KEY_INT,
+      KEY_DOUBLE,
+      KEY_STRING
+    };
+
     ParamKeyMetadata();
     void setName(std::string name) { m_name = name; }
     void setIsRequired(bool isReq) { m_isRequired = isReq; }
+    void setType(keyType type) { m_keyType = type; }
 
     std::string getName() { return m_name; }
+    std::string getKeyType() { return m_keyType; }
 
   private:
     std::string m_name;
+    std::string m_keyType;
     bool m_isRequired = true;
 };
 
@@ -66,12 +76,7 @@ class ParserDictionary
   private:
     std::vector<ParamBlockMetadata> m_blockDefs;
 
-    enum keyType
-    {
-      KEY_INT,
-      KEY_DOUBLE,
-      KEY_STRING
-    };
+    typedef ParamKeyMetadata::keyType keyType;
 
     void addCmdBlock(std::string name, bool isRequired, int maxOccur);
     void addCmdBlock(std::string name, bool isRequired);

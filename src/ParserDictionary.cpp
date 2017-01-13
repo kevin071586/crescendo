@@ -77,6 +77,7 @@ void ParserDictionary::addCmdBlockKey(std::string name, keyType type,
   ParamKeyMetadata key;
   key.setName(name);
   key.setIsRequired(isRequired);
+  key.setType(type);
 
   switch (type) {
     case keyType::KEY_INT:
