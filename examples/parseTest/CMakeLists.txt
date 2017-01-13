@@ -51,7 +51,12 @@ INCLUDE_DIRECTORIES( ${Trilinos_INCLUDE_DIRS}
 
 LINK_DIRECTORIES(${Trilinos_LIBRARY_DIRS} ${Trilinos_TPL_LIBRARY_DIRS})
 LINK_LIBRARIES(${Trilinos_LIBRARIES})
-ADD_EXECUTABLE( main main.cpp ${CRESCENDO_SRC_DIR}/Parser.cpp )
+ADD_EXECUTABLE( main main.cpp
+                 ${CRESCENDO_SRC_DIR}/Parser.cpp
+                 ${CRESCENDO_SRC_DIR}/ParserCmdBlock.cpp
+                 ${CRESCENDO_SRC_DIR}/ParserUtil.cpp
+                 ${CRESCENDO_SRC_DIR}/ParserDictionary.cpp
+                 )
 
 
 

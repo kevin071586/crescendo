@@ -1,6 +1,8 @@
 #include <iostream>
 #include <string>
 #include "Parser.h"
+#include <ParserUtil.h>
+#include <ParserDictionary.h>
 
 int main(int argc, char** argv) {
 
@@ -26,6 +28,15 @@ int main(int argc, char** argv) {
   parser.getFieldInt("doesntExist");
   parser.getFieldDouble("doesntExist");
   parser.getFieldString("doesntExist");
+
+  // Build a ParserUtil object and use a method to make sure it doesnt fail
+  ParserUtil m_parserUtil;
+  std::string testString = "  Trim left and right  ";
+  m_parserUtil.trim(testString);
+
+  // Dump the available output
+  ParserDictionary dict;
+  dict.Print();
 
   return 0;
 }

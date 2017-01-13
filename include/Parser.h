@@ -3,6 +3,8 @@
 
 #include <string>
 #include <map>
+#include <ParserCmdBlock.h>
+#include <ParserUtil.h>
 
 class Parser 
 {
@@ -26,18 +28,14 @@ class Parser
   private:
     std::string m_filename;
     std::map<std::string, std::string> m_inputParam;
+
+    ParserUtil m_parserUtil;
+    ParserCmdBlock m_mainBlock;
     
     bool isKeyValuePair( std::string line );
+    bool isCmdBlock( std::string line );
     void getKeyValuePair( std::string line, std::string& key, std::string& value );
 
-    // std::string trimming methods
-    static inline std::string& ltrim(std::string &s);
-    static inline std::string& rtrim(std::string &s);
-    static inline std::string& trim(std::string &s);
-
-    // std::string cleaning, purge trailing comments
-    static inline std::string& stripComment( std::string &s );
-    static inline std::string& toLower( std::string &s );
 };
 
 #endif // PARSER_H
