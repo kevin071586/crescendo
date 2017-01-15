@@ -271,13 +271,7 @@ int main(int argc, char** argv) {
         hexNodes(elemIndex, inode, 1) = coords[1];
         hexNodes(elemIndex, inode, 2) = coords[2];
    
-        // TODO: just a test for filling the epetra matrix
-        // Fill epetra matrix
-        // double value = 1;
-        // int num_entries = 1;
-        // int row_idx = spatialDim*stkMeshBulkData.identifier(nodes[inode]);
-        // int col_idx = row_idx;
-        // stiffness_matrix.InsertGlobalValues(row_idx, num_entries, &value, &col_idx);
+        // Define global row ID for position in Epetra_FECrsMatrix 
         int global_node_id = stkMeshBulkData.identifier(nodes[inode]);
         hex_node_global_id(elemIndex, spatialDim*inode + 0) = spatialDim*global_node_id + 0;
         hex_node_global_id(elemIndex, spatialDim*inode + 1) = spatialDim*global_node_id + 1;
@@ -360,13 +354,6 @@ int main(int argc, char** argv) {
           int col_idx = hex_node_global_id(elemIndex, j);
           double value = stiffnessMatrix(elemIndex, i, j);
           stiffness_matrix.InsertGlobalValues(row_idx, 1, &value, &col_idx);
-
-          // TODO: Debug only --> add diagonal stiffnesses to prevent
-          // singularity in K
-          // if( row_idx == col_idx ){
-          //   value = 0.5;
-          //   stiffness_matrix.InsertGlobalValues(row_idx, 1, &value, &col_idx);
-          // }
         }
       }
     }
