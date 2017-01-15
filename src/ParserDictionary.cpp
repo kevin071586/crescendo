@@ -139,8 +139,6 @@ void ParserDictionary::print()
     ParamBlockMetadata blk = blk_it->second;
     std::cout << "begin " << blk.getName() << std::endl;
     
-    typedef ParamKeyMetadata::keyType keyType;
-    
     t_keyMap keyMap = blk.getKeys();
     t_keyMap::iterator it;
 
