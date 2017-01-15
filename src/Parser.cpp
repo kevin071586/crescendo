@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iostream>
 #include <map>
+#include <algorithm>
 
 #include <Parser.h>
 #include <ParserCmdBlock.h>
@@ -50,11 +51,19 @@ void Parser::parse()
     if (isKeyValuePair(line)) {
       std::string key, value;
       getKeyValuePair(line, key, value);
-      m_inputParam[key] = value;
 
       // Add key-value pairs to current block
-      ParserCmdBlock currBlock = m_cmdBlocks.back();
+      ParserCmdBlock& currBlock = m_cmdBlocks.back();
       currBlock.addKeyValuePair(key,value);
+
+      if (m_dictionary.isValidBlockKey(currBlock.getType(), key)) {
+        std::cout << "Key " << key << " is valid for " 
+          << currBlock.getType() << std::endl;
+      }
+      else {
+        std::cout << "Invalid key name " << key << " for " <<
+          currBlock.getType() << std::endl;
+      }
     }
 
     // Read command blocks
@@ -84,77 +93,6 @@ void Parser::parse()
   return;
 }
 
-
-// Access methods, return fields by type 
-// ==================================================================
-int Parser::getFieldInt( std::string key )
-{
-  m_parserUtil.toLower(key);
-  try {
-    return std::stoi(m_inputParam[key]);
-  }
-  catch (const std::invalid_argument& ia) {
-    std::cerr << "Invalid argument for parameter " << key
-              << ":" << ia.what() << '\n';
-  }
-  return 0;
-}
-
-int Parser::getFieldInt( std::string key, int defaultValue )
-{
-  m_parserUtil.toLower(key);
-  try {
-    return std::stoi(m_inputParam[key]);
-  }
-  catch (const std::invalid_argument& ia) {
-    std::cerr << "Invalid argument for parameter " << key
-              << ":" << ia.what() << '\n';
-  }
-  return defaultValue;
-}
-
-double Parser::getFieldDouble( std::string key )
-{
-  m_parserUtil.toLower(key);
-  try {
-    return std::stod(m_inputParam[key]);
-  }
-  catch (const std::invalid_argument& ia) {
-    std::cerr << "Invalid argument for parameter " << key
-              << ":" << ia.what() << '\n';
-  }
-  return 0.0;
-}
-
-double Parser::getFieldDouble( std::string key, double defaultValue )
-{
-  m_parserUtil.toLower(key);
-  try {
-    return std::stod(m_inputParam[key]);
-  }
-  catch (const std::invalid_argument& ia) {
-    std::cerr << "Invalid argument for parameter " << key
-              << ":" << ia.what() << '\n';
-  }
-  return defaultValue;
-}
-
-std::string Parser::getFieldString( std::string key )
-{
-  m_parserUtil.toLower(key);
-  return m_inputParam[key];
-}
-std::string Parser::getFieldString( std::string key, std::string defaultValue )
-{
-  m_parserUtil.toLower(key);
-  if ( m_inputParam.find(key) == m_inputParam.end() ) {
-    return defaultValue;
-  } 
-  else {
-    return m_inputParam[key];
-  }
-}
-
 // Check if string is in key-value pair format
 // ==================================================================
 bool Parser::isKeyValuePair( std::string line )
@@ -177,9 +115,8 @@ bool Parser::isCmdBlock( std::string line )
   return false;
 }
 
-
-
-// Get key-value pair
+// Get key-value pair from a line in the input deck, to be 
+// assigned to a ParserCmdBlock object
 // ==================================================================
 void Parser::getKeyValuePair( std::string line, std::string& key, std::string& value )
 {
@@ -198,3 +135,16 @@ void Parser::getKeyValuePair( std::string line, std::string& key, std::string& v
 }
 
 
+// Get a ParserCmdBlock object by block type
+// ==================================================================
+ParserCmdBlock Parser::getCmdBlock(std::string type) 
+{
+  ParserCmdBlock cmdBlock;
+  for (int i=0; i < m_cmdBlocks.size(); ++i) {
+    cmdBlock = m_cmdBlocks[i];
+    if (cmdBlock.getType().compare(type) == 0) { 
+      break; 
+    }
+  }
+  return cmdBlock;
+}

@@ -16,24 +16,15 @@ class Parser
     Parser( std::string filename ); 
 
     // Basic use methods
-    void setFile( std::string filename );
+    void setFile(std::string filename);
     void parse();
-
-    // Access methods
-    int getFieldInt( std::string key );
-    int getFieldInt( std::string key, int defaultValue );
-    double getFieldDouble( std::string key );
-    double getFieldDouble( std::string key, double defaultValue );
-    std::string getFieldString( std::string key );
-    std::string getFieldString( std::string key, std::string defaultValue );
+    ParserCmdBlock getCmdBlock(std::string type);
 
   private:
     std::string m_filename;
-    std::map<std::string, std::string> m_inputParam;
     ParserDictionary m_dictionary;
 
     ParserUtil m_parserUtil;
-    ParserCmdBlock m_mainBlock;
     std::vector<ParserCmdBlock> m_cmdBlocks;
     
     bool isKeyValuePair( std::string line );

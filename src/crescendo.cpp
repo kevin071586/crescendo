@@ -44,6 +44,7 @@
 #include <ElasticMaterial.hpp>
 #include <EigenSolver.hpp>
 #include <Parser.h>
+#include <ParserCmdBlock.h>
 
 using namespace Intrepid;
 typedef FunctionSpaceTools fst;
@@ -69,10 +70,11 @@ int main(int argc, char** argv) {
   Parser parser(fileName);
   parser.parse();
 
-  double rho = parser.getFieldDouble("rho");
-  double E = parser.getFieldDouble("E");
-  double nu = parser.getFieldDouble("nu");
-  std::string in_filename = parser.getFieldString("Database");
+  ParserCmdBlock feaModel = parser.getCmdBlock("finite element model");
+  double rho = feaModel.getFieldDouble("density");
+  double E = feaModel.getFieldDouble("young modulus");
+  double nu = feaModel.getFieldDouble("poissons ratio");
+  std::string in_filename = feaModel.getFieldString("Database");
 
 
   // --------------------------------------------------------------------------

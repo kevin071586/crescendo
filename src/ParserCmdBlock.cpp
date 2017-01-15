@@ -1,4 +1,5 @@
 #include <ParserCmdBlock.h>
+#include <ParserUtil.h>
 
 // Constructor
 // ==================================================================
@@ -26,19 +27,43 @@ void ParserCmdBlock::addKeyValuePair(std::string key, std::string value)
   //        cmdBlock = parser.getCmdBlock("block type")
   //        cmdBlock.getParamInt("keyName") maybe?
 
-
-  // Check if key exists in this block
-  // if (std::find(v.begin(), v.end(), "abc") != v.end()) {
-  //   std::cout << "Block name: " << m_name << std::endl; 
-  //   std::cout << "Block type: " << m_type << std::endl; 
-  // }
-  // else {
-  // }
-  
-  m_paramString[key] = value;
+  m_paramVal[key] = value;
 
   std::cout << "Adding to block " << m_name << ": " 
-            << "Key: " << key << ", Type: " << m_type << std::endl;
-
+            << "Key: " << key << ", Value: " << value << std::endl;
   return;
+}
+
+// Access methods, return fields by type 
+// ==================================================================
+int ParserCmdBlock::getFieldInt(std::string key)
+{
+  ParserUtil::toLower(key);
+  try {
+    return std::stoi(m_paramVal[key]);
+  }
+  catch (const std::invalid_argument& ia) {
+    std::cerr << "Invalid argument for parameter " << key
+              << ":" << ia.what() << '\n';
+  }
+  return 0;
+}
+
+double ParserCmdBlock::getFieldDouble(std::string key)
+{
+  ParserUtil::toLower(key);
+  try {
+    return std::stod(m_paramVal[key]);
+  }
+  catch (const std::invalid_argument& ia) {
+    std::cerr << "Invalid argument for parameter " << key
+              << ":" << ia.what() << '\n';
+  }
+  return 0.0;
+}
+
+std::string ParserCmdBlock::getFieldString(std::string key)
+{
+  ParserUtil::toLower(key);
+  return m_paramVal[key];
 }

@@ -18,7 +18,7 @@ ParserDictionary::ParserDictionary()
 }
 
 
-// ParamBlockMetadata, Constructors
+// ParamKeyMetadata, Constructors
 // ==================================================================
 ParamKeyMetadata::ParamKeyMetadata()
 {
@@ -43,7 +43,9 @@ void ParserDictionary::addCmdBlock(std::string name,
   pbmd.setMaxOccur(maxOccur);
 
   // Add block metadata to vector
-  m_blockDefs.push_back(pbmd);
+  t_blockMap::iterator it;
+  it = m_blockDefs.insert(std::make_pair(name, pbmd));
+  m_lastBlockAdded = &(it->second);
 
   return;
 }
@@ -59,7 +61,9 @@ void ParserDictionary::addCmdBlock(std::string name, bool isRequired)
   pbmd.setIsRequired(isRequired);
 
   // Add block metadata to vector
-  m_blockDefs.push_back(pbmd);
+  t_blockMap::iterator it;
+  it = m_blockDefs.insert(std::make_pair(name, pbmd));
+  m_lastBlockAdded = &(it->second);
 
   return;
 }
@@ -73,68 +77,51 @@ void ParserDictionary::addCmdBlockKey(std::string name, keyType type,
   ParserUtil::trim(name);
 
   // Last command block that was added
-  ParamBlockMetadata& lastBlock = m_blockDefs.back();
+  ParamBlockMetadata& lastBlock = *m_lastBlockAdded;
 
   ParamKeyMetadata key;
   key.setName(name);
   key.setIsRequired(isRequired);
   key.setType(type);
-
-  switch (type) {
-    case keyType::KEY_INT:
-      lastBlock.addKeyInt(key);
-      break;
-
-    case keyType::KEY_DOUBLE:
-      lastBlock.addKeyDouble(key);
-      break;
-
-    case keyType::KEY_STRING:
-      lastBlock.addKeyString(key);
-      break;
-
-    // no default case
-  }
-
   lastBlock.addKey(key);
 }
 
-// Get a list of the defined command blocks
+// Get block metadata from dictionary, by block type name
 // ==================================================================
-std::vector<std::string> ParserDictionary::getBlocks()
+ParamBlockMetadata ParserDictionary::getBlock(std::string name)
 {
-  std::vector<std::string> blockDefs;
-  for (int i=0; i < m_blockDefs.size(); ++i) {
-    blockDefs.push_back(m_blockDefs[i].getName());
-  }
-  return blockDefs;
+  t_blockMap blockMap = getBlocks();
+  t_blockMap::iterator it = blockMap.find(name);
+  return it->second;
 }
 
-// Get index for block metadata, given a name 
-//   Returns the index if found
-//   Returns -1 if not found.
+// Get block key metadata from dictionary, by block type name
 // ==================================================================
-int ParserDictionary::getBlockMetadataIndex(std::string name)
+t_keyMap ParserDictionary::getBlockKeys(std::string name)
 {
-  std::vector<std::string> blkmd = getBlocks();
-  std::vector<std::string>::iterator it;
-  it = std::find(blkmd.begin(), blkmd.end(), name);
-  if (it != blkmd.end()) {
-    int index = it - blkmd.begin();
-    return index;
-  }
-  else {
-    return -1;
-  }
+  ParamBlockMetadata block = getBlock(name);
+  return block.getKeys();
 }
 
 // Check if this block is defined in the dictionary 
 // ==================================================================
 bool ParserDictionary::isValidBlock(std::string name)
 {
-  int index = getBlockMetadataIndex(name);
-  if (index != -1) {
-    return true;
+  t_blockMap blockMap = getBlocks();
+  t_blockMap::iterator it = blockMap.find(name);
+  return (it != blockMap.end()) ? true : false;
+}
+
+
+// Check if a block-key pair is defined in the dictionary
+// ==================================================================
+bool ParserDictionary::isValidBlockKey(std::string blockName, std::string key)
+{
+  if (isValidBlock(blockName)) {
+    t_keyMap keys = getBlockKeys(blockName);
+    t_keyMap::iterator it = keys.find(key);
+    return (it != keys.end()) ? true : false;
+
   }
   else {
     return false;
@@ -142,33 +129,38 @@ bool ParserDictionary::isValidBlock(std::string name)
 }
 
 
+
 // Print out available command syntax
 // ==================================================================
 void ParserDictionary::print()
 {
-  for (int i=0; i < m_blockDefs.size(); ++i) {
-    ParamBlockMetadata blk = m_blockDefs[i];
+  t_blockMap::iterator blk_it;
+  for (blk_it=m_blockDefs.begin(); blk_it != m_blockDefs.end(); ++blk_it) {
+    ParamBlockMetadata blk = blk_it->second;
     std::cout << "begin " << blk.getName() << std::endl;
+    
+    typedef ParamKeyMetadata::keyType keyType;
+    
+    t_keyMap keyMap = blk.getKeys();
+    t_keyMap::iterator it;
 
-    // print int keys
-    std::vector<ParamKeyMetadata> keys;
-    keys = blk.getKeyInt();
-    for (int j=0; j < keys.size(); ++j) {
-      std::cout << "  " << keys[j].getName() << " = <int>"
-                << std::endl;
-    }
+    for (it = keyMap.begin(); it != keyMap.end(); ++it) {
+      ParamKeyMetadata key = it->second;
+      std::string keyTypeStr;
 
-    // print double keys
-    keys = blk.getKeyDouble();
-    for (int j=0; j < keys.size(); ++j) {
-      std::cout << "  " << keys[j].getName() << " = <real>"
-                << std::endl;
-    }
-
-    // print string keys
-    keys = blk.getKeyString();
-    for (int j=0; j < keys.size(); ++j) {
-      std::cout << "  " << keys[j].getName() << " = <string>"
+      switch (key.getKeyType()) {
+        case keyType::KEY_INT:
+          keyTypeStr = "<int>";
+          break;
+        case keyType::KEY_DOUBLE:
+          keyTypeStr = "<real>";
+          break;
+        case keyType::KEY_STRING:
+          keyTypeStr = "<string>";
+          break;
+      }
+      std::cout << "  " << key.getName() << " = "
+                << keyTypeStr
                 << std::endl;
     }
 
