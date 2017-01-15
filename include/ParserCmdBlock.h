@@ -16,15 +16,15 @@ class ParserCmdBlock
     std::string getType() {return m_type;}
 
     // Data access methods
-    int getFieldInt( std::string key );
-    double getFieldDouble( std::string key );
-    std::string getFieldString( std::string key );
+    int         getFieldInt(std::string key);
+    double      getFieldDouble(std::string key);
+    std::string getFieldString(std::string key);
 
     // Data assignment methods
     void addKeyValuePair(std::string key, std::string value);
 
-    std::map<std::string, std::string> m_paramVal;
   private:
+    std::map<std::string, std::string> m_paramVal;
     std::string m_name = "DEFAULT_CMD_BLOCK";
     std::string m_type = "DEFAULT_TYPE";
 };

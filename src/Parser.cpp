@@ -54,15 +54,8 @@ void Parser::parse()
 
       // Add key-value pairs to current block
       ParserCmdBlock& currBlock = m_cmdBlocks.back();
-      currBlock.addKeyValuePair(key,value);
-
       if (m_dictionary.isValidBlockKey(currBlock.getType(), key)) {
-        std::cout << "Key " << key << " is valid for " 
-          << currBlock.getType() << std::endl;
-      }
-      else {
-        std::cout << "Invalid key name " << key << " for " <<
-          currBlock.getType() << std::endl;
+        currBlock.addKeyValuePair(key,value);
       }
     }
 
