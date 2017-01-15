@@ -70,11 +70,15 @@ int main(int argc, char** argv) {
   Parser parser(fileName);
   parser.parse();
 
-  ParserCmdBlock feaModel = parser.getCmdBlock("finite element model");
-  double rho = feaModel.getFieldDouble("density");
-  double E = feaModel.getFieldDouble("young modulus");
-  double nu = feaModel.getFieldDouble("poissons ratio");
-  std::string in_filename = feaModel.getFieldString("Database");
+  // double rho = parser.getFieldDouble("rho");
+  // double E = parser.getFieldDouble("E");
+  // double nu = parser.getFieldDouble("nu");
+  // std::string in_filename = parser.getFieldString("Database");
+  ParserCmdBlock cmdBlock = parser.getCmdBlock("block type");
+  double rho = cmdBlock.getFieldDouble("density"); 
+  double E = cmdBlock.getFieldDouble("youngs modulus"); 
+  double nu = cmdBlock.getFieldDouble("poissons ratio"); 
+  std::string in_filename = cmdBlock.getFieldString("database");
 
 
   // --------------------------------------------------------------------------
@@ -89,7 +93,7 @@ int main(int argc, char** argv) {
 
   // Define the input file
   std::string dbtype("exodusII");
-  //std::string in_filename("two_hex8_elements.g");
+  // std::string in_filename("two_hex8_elements.g");
   // std::string in_filename("test_2elem.g");
   // std::string in_filename("hex8_10x10x10.g");
 
