@@ -1,5 +1,5 @@
 #include <Intrepid_FieldContainer.hpp>
-#include <ElasticMaterial.hpp>
+#include <ElasticMaterial.h>
 
 using namespace Intrepid;
 

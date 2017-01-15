@@ -1,4 +1,4 @@
-#include <EigenSolver.hpp>
+#include <EigenSolver.h>
 //RCP<Epetra_FECrsMatrix> K = rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
 //RCP<Epetra_FECrsMatrix> M = rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
 

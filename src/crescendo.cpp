@@ -40,9 +40,9 @@
 #include <Teuchos_ArrayView.hpp>
 // #include <Teuchos_RCP.hpp>
 
-#include <integrateMatrices.hpp>
-#include <ElasticMaterial.hpp>
-#include <EigenSolver.hpp>
+#include <integrateMatrices.h>
+#include <ElasticMaterial.h>
+#include <EigenSolver.h>
 #include <Parser.h>
 #include <ParserCmdBlock.h>
 

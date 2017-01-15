@@ -1,6 +1,6 @@
 #include <Intrepid_FieldContainer.hpp>
 #include <Intrepid_FunctionSpaceTools.hpp>
-#include <integrateMatrices.hpp>
+#include <integrateMatrices.h>
 
 using namespace Intrepid;
 typedef FunctionSpaceTools fst;
