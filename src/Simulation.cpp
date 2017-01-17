@@ -105,6 +105,14 @@ void Simulation::setResultsOutput(size_t& resultOutputHandle)
     stkMeshMetaData.declare_field<ScalarField>(stk::topology::NODE_RANK, "temperature");
   stk::mesh::put_field_on_entire_mesh(temperatureField);
 
+  // Add defined fields to the "results output mesh"
+  m_ioBroker.add_field(resultOutputHandle, displacementsField, "displ");
+  m_ioBroker.add_field(resultOutputHandle, temperatureField);
+
+  // Populate/read in the bulk mesh data
+  // Note: MUST be called after defining fields
+  m_ioBroker.populate_bulk_data();
+
   return;
 }
 
