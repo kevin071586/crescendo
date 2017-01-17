@@ -64,11 +64,20 @@ LINK_DIRECTORIES(${Trilinos_LIBRARY_DIRS} ${Trilinos_TPL_LIBRARY_DIRS})
 
 LINK_LIBRARIES(${Trilinos_LIBRARIES})
 
-ADD_EXECUTABLE( crescendo 
+ADD_EXECUTABLE( crescendo_old 
   ${CRESCENDO_DIR}/src/crescendo.cpp
   ${CRESCENDO_DIR}/src/integrateMatrices.cpp
   ${CRESCENDO_DIR}/src/ElasticMaterial.cpp
   ${CRESCENDO_DIR}/src/EigenSolver.cpp
+  ${CRESCENDO_DIR}/src/Parser.cpp
+  ${CRESCENDO_DIR}/src/ParserCmdBlock.cpp
+  ${CRESCENDO_DIR}/src/ParserUtil.cpp
+  ${CRESCENDO_DIR}/src/ParserDictionary.cpp
+  )
+
+ADD_EXECUTABLE( crescendo
+  ${CRESCENDO_DIR}/src/CrescendoMain.cpp
+  ${CRESCENDO_DIR}/src/Simulation.cpp
   ${CRESCENDO_DIR}/src/Parser.cpp
   ${CRESCENDO_DIR}/src/ParserCmdBlock.cpp
   ${CRESCENDO_DIR}/src/ParserUtil.cpp

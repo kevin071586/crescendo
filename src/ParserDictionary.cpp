@@ -9,12 +9,15 @@
 ParserDictionary::ParserDictionary() 
 {
   addCmdBlock("finite element model", true, 1);
-  addCmdBlockKey("database",          keyType::KEY_STRING, true);
+  addCmdBlockKey("database name",          keyType::KEY_STRING, true);
   addCmdBlockKey("youngs modulus",    keyType::KEY_DOUBLE, true);
   addCmdBlockKey("density",           keyType::KEY_DOUBLE, true);
   addCmdBlockKey("poissons ratio",    keyType::KEY_DOUBLE, true);
 
   addCmdBlock("solver parameters", false);
+
+  addCmdBlock("results output", false);
+  addCmdBlockKey("database name",          keyType::KEY_STRING, true);
 }
 
 

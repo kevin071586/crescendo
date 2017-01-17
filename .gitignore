@@ -11,6 +11,7 @@ cmake_install.cmake
 main
 *.swp
 bin/crescendo
+bin/crescendo_old
 *.g.*
 *.e*
 *.dat

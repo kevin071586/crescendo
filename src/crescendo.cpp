@@ -74,11 +74,11 @@ int main(int argc, char** argv) {
   // double E = parser.getFieldDouble("E");
   // double nu = parser.getFieldDouble("nu");
   // std::string in_filename = parser.getFieldString("Database");
-  ParserCmdBlock cmdBlock = parser.getCmdBlock("block type");
+  ParserCmdBlock cmdBlock = parser.getCmdBlock("finite element model");
   double rho = cmdBlock.getFieldDouble("density"); 
   double E = cmdBlock.getFieldDouble("youngs modulus"); 
   double nu = cmdBlock.getFieldDouble("poissons ratio"); 
-  std::string in_filename = cmdBlock.getFieldString("database");
+  std::string in_filename = cmdBlock.getFieldString("database name");
 
 
   // --------------------------------------------------------------------------

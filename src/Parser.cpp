@@ -80,9 +80,6 @@ void Parser::parse()
     }
 
   }
-
-  std::cout << "Total number of command blocks: " << m_cmdBlocks.size() 
-            << std::endl;
   return;
 }
 
