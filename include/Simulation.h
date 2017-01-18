@@ -44,6 +44,15 @@ class Simulation
     // itself.
     void initializeHex8Cubature();
 
+    // Setup row map for distributed Epetra vectors/matrices/operators
+    void setupEpetraRowMap();
+
+    // Local-to-Global and Global-to-Local DOF Maps
+    size_t localIdToLocalDof(size_t localId, int dofNum);
+    size_t localDofToLocalId(size_t localId, int dofNum);
+    size_t globalIdToGlobalDof(size_t globalId, int dofNum);
+    size_t globalDofToGlobalId(size_t globalDof, int dofNum);
+
 };
 
 #endif // SIMULATION_H

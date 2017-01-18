@@ -1,15 +1,18 @@
 // ----------------------------------------------------------------------------
 // TODO List:
-//  1) Handle situation when input mesh doesnt exist
-//  2) Function to write log file to given stream, one proc output only.
+//  1) Function to write log file to given stream, one proc output only.
 //
 // ----------------------------------------------------------------------------
+
+#include "Epetra_MpiComm.h"
+#include "Epetra_Map.h"
 
 #include "stk_io/DatabasePurpose.hpp"           // for READ_MESH, WRITE_RESULTS, etc
 #include "stk_io/StkMeshIoBroker.hpp"           // for StkMeshIoBroker
 #include "stk_mesh/base/Field.hpp"              // for Field
+#include <stk_mesh/base/GetEntities.hpp>        // for get_entities, count_entities
 #include "stk_mesh/base/MetaData.hpp"           // for MetaData
-#include "stk_mesh/base/CoordinateSystems.hpp"  // for Cartesian type, I think.
+#include "stk_mesh/base/CoordinateSystems.hpp"  // for Cartesian type
 
 #include "Shards_CellTopology.hpp"              // For Hex8 topology
 #include "Intrepid_CellTools.hpp"
@@ -44,6 +47,9 @@ void Simulation::Execute()
 
   size_t exoOutputMesh;
   setResultsOutput(exoOutputMesh);
+
+  // Must come after populate_bulk_data is called
+  setupEpetraRowMap();
 
   return; 
 }
@@ -155,6 +161,72 @@ void Simulation::initializeHex8Cubature()
 
   return;
 }
+
+// Setup Epetra Row map for distributed vectors/matrices/operators
+// Note: must come AFTER populate_bulk_data() has been called
+// ============================================================================
+void Simulation::setupEpetraRowMap()
+{
+  // Wrap the MPI communicator so Epetra can use it
+  Epetra_MpiComm epetraComm(m_stkComm);
+
+  // Get reference to bulk_data ... I'll use it a lot here.
+  stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
+
+  // Select and count locally-owned elements
+  std::vector<unsigned> entityCounts;
+  stk::mesh::Selector localSelector = m_ioBroker.meta_data().locally_owned_part();
+  stk::mesh::count_entities(localSelector, bulkData, entityCounts);
+
+  // Calculate a rough estimate for number of non-zero entries in each row.  A
+  // better estimate here may speed things up.
+  const int numLocalNodes = entityCounts[stk::topology::NODE_RANK];
+  const int numLocalDof = m_spatialDim*numLocalNodes;
+  const int numNonzeroEstimate = m_spatialDim*numLocalDof;
+
+  // A primary objective is to set up the global ID map for use in initializing
+  // the Epetra_Map object
+  std::vector<int> myGlobalIdMap(numLocalDof);
+
+  // Bucket loop on local nodes to setup the Epetra Row Map 
+  const stk::mesh::BucketVector nodeBuckets = 
+    bulkData.get_buckets(stk::topology::NODE_RANK, localSelector);
+
+  for (size_t bucketIdx = 0; bucketIdx < nodeBuckets.size(); ++bucketIdx) {
+    stk::mesh::Bucket &nodeBucket = *nodeBuckets[bucketIdx];
+    for (size_t nodeIdx = 0; nodeIdx < nodeBucket.size(); ++nodeIdx) {
+      stk::mesh::Entity node = nodeBucket[nodeIdx];
+      const int localId = bulkData.local_id(node);
+      const int globalId = bulkData.identifier(node);
+
+      // Assign each DOF to the map.  Note: using local Ids here to index the
+      // map, but using the global_id (identifier) to derive a "global DOF
+      // identifier" since each node has multiple DOFs.
+      // NOTE: this is hard-coded for spatialDim = 3
+      myGlobalIdMap[localIdToLocalDof(localId, 0)] = globalIdToGlobalDof(globalId, 0);
+      myGlobalIdMap[localIdToLocalDof(localId, 1)] = globalIdToGlobalDof(globalId, 1);
+      myGlobalIdMap[localIdToLocalDof(localId, 2)] = globalIdToGlobalDof(globalId, 2);
+    }
+  }
+
+  // Finally, construct the Epetra_Map
+  Epetra_Map epetraRowMap(-1, numLocalDof, &myGlobalIdMap[0], 0, epetraComm);
+
+  return;
+}
+
+// Local-to-Global and Global-to-Local DOF Maps
+size_t Simulation::localIdToLocalDof(size_t localId, int dofNum)
+{ return m_spatialDim*localId + dofNum; }
+
+size_t Simulation::localDofToLocalId(size_t localDof, int dofNum)
+{ return (localDof - dofNum)/m_spatialDim; }
+
+size_t Simulation::globalIdToGlobalDof(size_t globalId, int dofNum)
+{ return m_spatialDim*globalId + dofNum; }
+
+size_t Simulation::globalDofToGlobalId(size_t globalDof, int dofNum)
+{ return (globalDof - dofNum)/m_spatialDim; }
 
 
   //double rho = cmdBlock.getFieldDouble("density"); 
