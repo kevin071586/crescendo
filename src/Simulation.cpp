@@ -31,18 +31,10 @@ Simulation::~Simulation()
 // ============================================================================
 void Simulation::Execute() 
 {
-  size_t exoOutputMesh;
-  try {
-    initializeInputMesh();
-  }
-  catch (const std::runtime_error& e) {
-    if (stk::parallel_machine_rank(m_stkComm) == 0) {
-      std::cout << "Error: Aborting due to runtime_error in Execute().\n";
-    }
-    throw;
-  }
+  initializeInputMesh();
 
-  //setResultsOutput(exoOutputMesh);
+  size_t exoOutputMesh;
+  setResultsOutput(exoOutputMesh);
 
   return; 
 }
