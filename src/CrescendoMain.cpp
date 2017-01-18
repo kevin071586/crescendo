@@ -26,6 +26,7 @@ int main(int argc, char *argv[]) {
   Simulation simulation(parser, stkComm);
 
   try {
+    simulation.setSpatialDim(spatialDim);
     simulation.Execute();
   }
   catch (const std::runtime_error& e) {

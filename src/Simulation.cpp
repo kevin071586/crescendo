@@ -11,6 +11,13 @@
 #include "stk_mesh/base/MetaData.hpp"           // for MetaData
 #include "stk_mesh/base/CoordinateSystems.hpp"  // for Cartesian type, I think.
 
+#include "Shards_CellTopology.hpp"              // For Hex8 topology
+#include "Intrepid_CellTools.hpp"
+#include "Intrepid_DefaultCubatureFactory.hpp"
+
+#include "Teuchos_RCP.hpp"                      // For RCP
+
+
 #include "Simulation.h"
 #include "ParserCmdBlock.h"
 
@@ -32,6 +39,8 @@ Simulation::~Simulation()
 void Simulation::Execute() 
 {
   initializeInputMesh();
+
+  initializeHex8Cubature();
 
   size_t exoOutputMesh;
   setResultsOutput(exoOutputMesh);
@@ -104,6 +113,45 @@ void Simulation::setResultsOutput(size_t& resultOutputHandle)
   // Populate/read in the bulk mesh data
   // Note: MUST be called after defining fields
   m_ioBroker.populate_bulk_data();
+
+  return;
+}
+
+// Initialize cubature for Hex8 element (fully-integrated)
+// ============================================================================
+void Simulation::initializeHex8Cubature()
+{
+  const int NUM_NODES_HEX8 = 8;
+  const int CUBATURE_DEGREE = 2;
+
+  // Define cell topology of the parent cell
+  shards::CellTopology shardsHex8(shards::getCellTopologyData<shards::Hexahedron<NUM_NODES_HEX8>>());
+
+  // Create cubature
+  Intrepid::DefaultCubatureFactory<double> cubFactory;
+  Teuchos::RCP<Intrepid::Cubature<double>> hexCubature =
+                                  cubFactory.create(shardsHex8, CUBATURE_DEGREE);
+
+  // Define basis
+  typedef Intrepid::FieldContainer<double> FieldContainer;
+  Intrepid::Basis_HGRAD_HEX_C1_FEM<double, FieldContainer> hexHGradBasis;
+  int numFields = hexHGradBasis.getCardinality();
+  int numCubPoints = hexCubature->getNumPoints();
+  
+  // Field containers for cubature
+  int cubDim = hexCubature->getDimension();
+  FieldContainer cubWeights(numCubPoints);
+  FieldContainer cubPoints(numCubPoints, cubDim);
+  FieldContainer hexGVals(numFields, numCubPoints);
+  FieldContainer hexGGradient(numFields, numCubPoints, m_spatialDim ); 
+
+  // Get cubature points and weights from the parent element definition
+  hexCubature->getCubature(cubPoints, cubWeights);
+  hexHGradBasis.getValues(hexGVals, cubPoints, Intrepid::OPERATOR_VALUE);
+
+  // get gradient values for hex8 element (note: number of values here is
+  // equal to cardinality of basis -- no need for # of cells).
+  hexHGradBasis.getValues(hexGGradient, cubPoints, Intrepid::OPERATOR_GRAD);
 
   return;
 }
