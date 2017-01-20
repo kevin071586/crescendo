@@ -2,7 +2,8 @@
 #define SIMULATION_H
 
 #include "stk_util/parallel/Parallel.hpp"
-#include <stk_io/StkMeshIoBroker.hpp>           // for StkMeshIoBroker
+#include "stk_io/StkMeshIoBroker.hpp"           // for StkMeshIoBroker
+#include "Epetra_Map.h"
 
 #include "Parser.h"
 
@@ -26,6 +27,7 @@ class Simulation
     int m_spatialDim;
     stk::ParallelMachine m_stkComm;
     stk::io::StkMeshIoBroker m_ioBroker;
+    // Epetra_Map m_epetraRowMap;
 
     // Initialize input mesh: read input mesh to create metadata 
     void initializeInputMesh();
@@ -45,13 +47,15 @@ class Simulation
     void initializeHex8Cubature();
 
     // Setup row map for distributed Epetra vectors/matrices/operators
-    void setupEpetraRowMap();
+    Epetra_Map setupEpetraRowMap();
 
     // Local-to-Global and Global-to-Local DOF Maps
     size_t localIdToLocalDof(size_t localId, int dofNum);
     size_t localDofToLocalId(size_t localId, int dofNum);
     size_t globalIdToGlobalDof(size_t globalId, int dofNum);
     size_t globalDofToGlobalId(size_t globalDof, int dofNum);
+
+    // Element bucket loop
 
 };
 

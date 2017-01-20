@@ -49,7 +49,8 @@ void Simulation::Execute()
   setResultsOutput(exoOutputMesh);
 
   // Must come after populate_bulk_data is called
-  setupEpetraRowMap();
+  Epetra_Map epetraRowMap = setupEpetraRowMap();
+  std::cout << epetraRowMap;
 
   return; 
 }
@@ -165,7 +166,7 @@ void Simulation::initializeHex8Cubature()
 // Setup Epetra Row map for distributed vectors/matrices/operators
 // Note: must come AFTER populate_bulk_data() has been called
 // ============================================================================
-void Simulation::setupEpetraRowMap()
+Epetra_Map Simulation::setupEpetraRowMap()
 {
   // Wrap the MPI communicator so Epetra can use it
   Epetra_MpiComm epetraComm(m_stkComm);
@@ -211,8 +212,10 @@ void Simulation::setupEpetraRowMap()
 
   // Finally, construct the Epetra_Map
   Epetra_Map epetraRowMap(-1, numLocalDof, &myGlobalIdMap[0], 0, epetraComm);
+  // std::cout << epetraRowMap;
+  //m_epetraRowMap = &epetraRowMap;
 
-  return;
+  return epetraRowMap;
 }
 
 // Local-to-Global and Global-to-Local DOF Maps
