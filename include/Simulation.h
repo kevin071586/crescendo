@@ -3,8 +3,13 @@
 
 #include "stk_util/parallel/Parallel.hpp"
 #include "stk_io/StkMeshIoBroker.hpp"           // for StkMeshIoBroker
-#include "Epetra_Map.h"
 
+#include "Epetra_Map.h"
+#include "Epetra_FECrsMatrix.h"
+
+#include "Intrepid_FieldContainer.hpp"
+
+#include "Element.h"
 #include "Parser.h"
 
 class Simulation
@@ -25,10 +30,11 @@ class Simulation
     Parser m_parserData;
 
     int m_spatialDim;
-    stk::ParallelMachine m_stkComm;
-    stk::io::StkMeshIoBroker m_ioBroker;
-    // Epetra_Map m_epetraRowMap;
 
+    stk::ParallelMachine m_stkComm;
+
+    stk::io::StkMeshIoBroker m_ioBroker;
+  
     // Initialize input mesh: read input mesh to create metadata 
     void initializeInputMesh();
 
@@ -40,22 +46,31 @@ class Simulation
     // as a global variable in a statics analysis.
     void setResultsOutput(size_t& resultOutputHandle);
 
-    // Initialize HEX8 cubature - make assumption that we have a HEX8 mesh, and
-    // then populates the fields of the parent element.  No information about 
-    // the mesh is required to do this, other than the topology of the element
-    // itself.
-    void initializeHex8Cubature();
+    // Setup row map for distributed Epetra vectors/matrices/operators.  Also
+    // providing an estimate of number of nonzero entries for constructing
+    // FECrsMatrix efficiently
+    Epetra_Map setupEpetraRowMap(int& numNonzeroEstimate);
 
-    // Setup row map for distributed Epetra vectors/matrices/operators
-    Epetra_Map setupEpetraRowMap();
+    // Element Bucket Loop: iterate over element buckets and compute mass
+    // and stiffness matrices, force vectors, jacobians, etc.  A lot of heavy
+    // lifting is done in this loop.
+    void elementBucketLoop(Element elementData, Epetra_FECrsMatrix& massMatrix,
+        Epetra_FECrsMatrix& stiffMatrix);
+    
+    // Process all nodes on all elements in a bucket.  In particular, get
+    // and return node coordinates.  Also define a global row ID for each
+    // node degree of freedom.
+    void processBucketNodes(const stk::mesh::Bucket& elemBucket,
+                      Intrepid::FieldContainer<double>& nodeCoords,
+                      Intrepid::FieldContainer<int>& nodeDofGlobalIds);
 
-    // Local-to-Global and Global-to-Local DOF Maps
+    // Local-to-Global and Global-to-Local DOF Maps (these are hard-coded
+    // for 3 dimensions).  They are used to account for the fact that each 
+    // node has multiple DOFs: u1 ==> (u1_x, u1_y, u1_z)
     size_t localIdToLocalDof(size_t localId, int dofNum);
     size_t localDofToLocalId(size_t localId, int dofNum);
     size_t globalIdToGlobalDof(size_t globalId, int dofNum);
     size_t globalDofToGlobalId(size_t globalDof, int dofNum);
-
-    // Element bucket loop
 
 };
 

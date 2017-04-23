@@ -82,6 +82,7 @@ ADD_EXECUTABLE( crescendo
   ${CRESCENDO_DIR}/src/ParserCmdBlock.cpp
   ${CRESCENDO_DIR}/src/ParserUtil.cpp
   ${CRESCENDO_DIR}/src/ParserDictionary.cpp
+  ${CRESCENDO_DIR}/src/Element.cpp
   )
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -1,11 +1,20 @@
 // ----------------------------------------------------------------------------
 // TODO List:
 //  1) Function to write log file to given stream, one proc output only.
+//  2) Improve command line options (allow -i for input, for example)
+//  3) Handle some constants better -- like m_spatialDim, NODES_PER_HEX, etc.
+//     For example, NODES_PER_HEX can probably be evaluated based on element.
+//  4) ElementLoop() needs to be broken up into smaller functions.  Some sections
+//     can be moved into the Element calculation routine, like calculating the
+//     jacobians.  Perhaps matrix calculation could be done there as well, provided
+//     an input matrix to store data in?
+//
 //
 // ----------------------------------------------------------------------------
 
 #include "Epetra_MpiComm.h"
 #include "Epetra_Map.h"
+#include "Epetra_FECrsMatrix.h"
 
 #include "stk_io/DatabasePurpose.hpp"           // for READ_MESH, WRITE_RESULTS, etc
 #include "stk_io/StkMeshIoBroker.hpp"           // for StkMeshIoBroker
@@ -17,12 +26,14 @@
 #include "Shards_CellTopology.hpp"              // For Hex8 topology
 #include "Intrepid_CellTools.hpp"
 #include "Intrepid_DefaultCubatureFactory.hpp"
+#include "Intrepid_FunctionSpaceTools.hpp"
 
 #include "Teuchos_RCP.hpp"                      // For RCP
 
-
+#include "Element.h"
 #include "Simulation.h"
 #include "ParserCmdBlock.h"
+
 
 // Constructor and destructor
 // ============================================================================
@@ -43,14 +54,28 @@ void Simulation::Execute()
 {
   initializeInputMesh();
 
-  initializeHex8Cubature();
+  // NOTE TO SELF: Currently working here.  I would like to store things like
+  // number of nodes per hex, cubature degree, and element topology type information
+  // in this class so that I can pass an object around with all that information,
+  // and compute jacobians and things with that information.
+  Element elementData;
+  elementData.initializeCubature();
 
   size_t exoOutputMesh;
   setResultsOutput(exoOutputMesh);
 
   // Must come after populate_bulk_data is called
-  Epetra_Map epetraRowMap = setupEpetraRowMap();
-  std::cout << epetraRowMap;
+  int numNonzeroEstimate;
+  Epetra_Map epetraRowMap = setupEpetraRowMap(numNonzeroEstimate);
+  Epetra_FECrsMatrix stiffMatrix(Copy, epetraRowMap, numNonzeroEstimate);
+  Epetra_FECrsMatrix massMatrix(Copy, epetraRowMap, numNonzeroEstimate);
+
+  elementBucketLoop(elementData, massMatrix, stiffMatrix);
+
+  // Solve eigen problem
+
+  // Eigenvalue problem post-processing
+
 
   return; 
 }
@@ -124,49 +149,10 @@ void Simulation::setResultsOutput(size_t& resultOutputHandle)
   return;
 }
 
-// Initialize cubature for Hex8 element (fully-integrated)
-// ============================================================================
-void Simulation::initializeHex8Cubature()
-{
-  const int NUM_NODES_HEX8 = 8;
-  const int CUBATURE_DEGREE = 2;
-
-  // Define cell topology of the parent cell
-  shards::CellTopology shardsHex8(shards::getCellTopologyData<shards::Hexahedron<NUM_NODES_HEX8>>());
-
-  // Create cubature
-  Intrepid::DefaultCubatureFactory<double> cubFactory;
-  Teuchos::RCP<Intrepid::Cubature<double>> hexCubature =
-                                  cubFactory.create(shardsHex8, CUBATURE_DEGREE);
-
-  // Define basis
-  typedef Intrepid::FieldContainer<double> FieldContainer;
-  Intrepid::Basis_HGRAD_HEX_C1_FEM<double, FieldContainer> hexHGradBasis;
-  int numFields = hexHGradBasis.getCardinality();
-  int numCubPoints = hexCubature->getNumPoints();
-  
-  // Field containers for cubature
-  int cubDim = hexCubature->getDimension();
-  FieldContainer cubWeights(numCubPoints);
-  FieldContainer cubPoints(numCubPoints, cubDim);
-  FieldContainer hexGVals(numFields, numCubPoints);
-  FieldContainer hexGGradient(numFields, numCubPoints, m_spatialDim ); 
-
-  // Get cubature points and weights from the parent element definition
-  hexCubature->getCubature(cubPoints, cubWeights);
-  hexHGradBasis.getValues(hexGVals, cubPoints, Intrepid::OPERATOR_VALUE);
-
-  // get gradient values for hex8 element (note: number of values here is
-  // equal to cardinality of basis -- no need for # of cells).
-  hexHGradBasis.getValues(hexGGradient, cubPoints, Intrepid::OPERATOR_GRAD);
-
-  return;
-}
-
 // Setup Epetra Row map for distributed vectors/matrices/operators
 // Note: must come AFTER populate_bulk_data() has been called
 // ============================================================================
-Epetra_Map Simulation::setupEpetraRowMap()
+Epetra_Map Simulation::setupEpetraRowMap(int& numNonzeroEstimate)
 {
   // Wrap the MPI communicator so Epetra can use it
   Epetra_MpiComm epetraComm(m_stkComm);
@@ -183,7 +169,7 @@ Epetra_Map Simulation::setupEpetraRowMap()
   // better estimate here may speed things up.
   const int numLocalNodes = entityCounts[stk::topology::NODE_RANK];
   const int numLocalDof = m_spatialDim*numLocalNodes;
-  const int numNonzeroEstimate = m_spatialDim*numLocalDof;
+  numNonzeroEstimate = m_spatialDim*numLocalDof;
 
   // A primary objective is to set up the global ID map for use in initializing
   // the Epetra_Map object
@@ -212,11 +198,149 @@ Epetra_Map Simulation::setupEpetraRowMap()
 
   // Finally, construct the Epetra_Map
   Epetra_Map epetraRowMap(-1, numLocalDof, &myGlobalIdMap[0], 0, epetraComm);
-  // std::cout << epetraRowMap;
-  //m_epetraRowMap = &epetraRowMap;
 
   return epetraRowMap;
 }
+
+
+// Element Bucket Loop 
+// ============================================================================
+void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& massMatrix,
+    Epetra_FECrsMatrix& stiffMatrix) {
+  using Intrepid::FieldContainer;
+  using Intrepid::CellTools;
+  typedef Intrepid::FunctionSpaceTools fst;
+
+  // Get reference to bulk_data ... I'll use it a lot here.
+  stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
+
+  // Define some important dimensions
+  const int numCubPoints = elementData.m_numCubPoints;
+  const int numFields = elementData.m_numFields;
+
+  // Get element toplogy and cubature 
+  const shards::CellTopology& elemTopology = elementData.getTopology();
+  const FieldContainer<double>& cubPoints = elementData.getCubPoints();
+  const FieldContainer<double>& cubWeights = elementData.getCubWeights();
+  const FieldContainer<double>& cubPointValues = elementData.getCubPointValues();
+  const FieldContainer<double>& cubPointGradient = elementData.getCubPointGradient();
+
+  // Select local processor part (includes elements/nodes/etc.)
+  stk::mesh::Selector localSelector = m_ioBroker.meta_data().locally_owned_part();
+  const stk::mesh::BucketVector elementBuckets = 
+    bulkData.get_buckets(stk::topology::ELEMENT_RANK, localSelector);
+
+  // Loop over buckets (then later, loop over elements within a bucket)
+  for (size_t bucketIndex = 0; bucketIndex < elementBuckets.size(); ++bucketIndex) {
+    stk::mesh::Bucket& elemBucket = *elementBuckets[bucketIndex];
+
+    unsigned numElements = elemBucket.size();
+    std::cout << "Number of bucket elements: " << numElements << std::endl;
+
+    // Arrays for node coordinates and global dof IDs.
+    const int NUM_NODES_HEX8 = 8;
+    Intrepid::FieldContainer<double> nodeCoords(numElements, NUM_NODES_HEX8, m_spatialDim);
+    Intrepid::FieldContainer<int> nodeDofGlobalIds(numElements, NUM_NODES_HEX8*m_spatialDim);
+
+    // Fill coordinate and global dof arrays
+    processBucketNodes(elemBucket, nodeCoords, nodeDofGlobalIds);
+
+    // Compute jacobian
+    FieldContainer<double> hexJacobian(numElements, numCubPoints, m_spatialDim, m_spatialDim);
+    FieldContainer<double> hexJacobianInv(numElements, numCubPoints, m_spatialDim, m_spatialDim);
+    FieldContainer<double> hexJacobianDet(numElements, numCubPoints);
+    FieldContainer<double> cellMeasure(numElements, numCubPoints);
+    FieldContainer<double> hexGValsTransformed(numElements, numFields, numCubPoints);
+    FieldContainer<double> hexGValsTransformedWeighted(numElements, numFields, numCubPoints);
+
+    CellTools<double>::setJacobian(hexJacobian, cubPoints, nodeCoords, elemTopology);
+    CellTools<double>::setJacobianInv(hexJacobianInv, hexJacobian);
+    CellTools<double>::setJacobianDet(hexJacobianDet, hexJacobian);
+    
+    // TODO: 
+    // simply replicates input cubPointValues for all cells in the set.
+    fst::HGRADtransformVALUE<double>(hexGValsTransformed, cubPointValues);
+
+    // compute and multiply cell measure
+    fst::computeCellMeasure<double>(cellMeasure, hexJacobianDet, cubWeights);
+    fst::multiplyMeasure<double>(hexGValsTransformedWeighted, cellMeasure, 
+        hexGValsTransformed);
+
+   
+    // TODO: ComputeElementMassMatrices(...)
+    const int numElemDof = m_spatialDim*numFields;
+    const int RHO_TEMP = 1.0; // TODO: Read density from input deck
+    FieldContainer<double> elemMassMatrix(numElements, numElemDof, numElemDof);
+    elementData.integrateMassMatrix(elemMassMatrix, hexGValsTransformed, 
+        hexGValsTransformedWeighted, RHO_TEMP, m_spatialDim);
+    
+    // TODO: AssembleMassMatrix(...)
+    for (size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex) {
+      for (int i=0; i < elemMassMatrix.dimension(1); ++i) {
+        for (int j=0; j < elemMassMatrix.dimension(2); ++j) {
+          int rowIdx = nodeDofGlobalIds(elemIndex, i);
+          int colIdx = nodeDofGlobalIds(elemIndex, j);
+          double value = elemMassMatrix(elemIndex, i, j);
+          massMatrix.InsertGlobalValues(rowIdx, 1, &value, &colIdx);
+        }
+      }
+    }
+    
+
+    // TODO: ComputeElementStiffnessMatrices(...)
+
+    // TODO: AsssembleStiffnessMatrix(...)
+
+  }
+
+  // Call .GlobalAssemble() on mass and stiffness matrix
+  massMatrix.GlobalAssemble();
+  
+  return;
+}
+
+// Process Nodes (in an element bucket)
+// ============================================================================
+void Simulation::processBucketNodes(const stk::mesh::Bucket& elemBucket,
+                              Intrepid::FieldContainer<double>& nodeCoords,
+                              Intrepid::FieldContainer<int>& nodeDofGlobalIds) {
+  // Get reference to bulk_data
+  stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
+
+  // Get the coordinates field
+  typedef stk::mesh::Field<double, stk::mesh::Cartesian> CoordinatesField_t;
+  CoordinatesField_t const& coord_field = 
+      static_cast<CoordinatesField_t const&>(m_ioBroker.get_coordinate_field());
+
+  // Loop over each element in the bucket
+  for (size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex) {
+    stk::mesh::Entity elem = elemBucket[elemIndex];
+
+    // Get nodes array belonging to this element
+    unsigned numNodes = bulkData.num_nodes(elem);
+    stk::mesh::Entity const* nodes = bulkData.begin_nodes(elem);
+
+    // Loop over each node in the current element
+    for (unsigned nodeIndex = 0; nodeIndex < numNodes; ++nodeIndex) {
+      double* coords = stk::mesh::field_data(coord_field, nodes[nodeIndex]);
+
+      // Assumption that spatial dimension is 3
+      nodeCoords(elemIndex, nodeIndex, 0) = coords[0];
+      nodeCoords(elemIndex, nodeIndex, 1) = coords[1];
+      nodeCoords(elemIndex, nodeIndex, 2) = coords[2];
+
+      // Assign 'spatial-dim' global IDs to each node for its DOFs
+      int globalNodeId = bulkData.identifier(nodes[nodeIndex]);
+      nodeDofGlobalIds(elemIndex, m_spatialDim*nodeIndex + 0) = m_spatialDim*globalNodeId + 0;
+      nodeDofGlobalIds(elemIndex, m_spatialDim*nodeIndex + 1) = m_spatialDim*globalNodeId + 1;
+      nodeDofGlobalIds(elemIndex, m_spatialDim*nodeIndex + 2) = m_spatialDim*globalNodeId + 2;
+    }
+  }
+
+  return;
+}
+
+
 
 // Local-to-Global and Global-to-Local DOF Maps
 size_t Simulation::localIdToLocalDof(size_t localId, int dofNum)
@@ -230,9 +354,4 @@ size_t Simulation::globalIdToGlobalDof(size_t globalId, int dofNum)
 
 size_t Simulation::globalDofToGlobalId(size_t globalDof, int dofNum)
 { return (globalDof - dofNum)/m_spatialDim; }
-
-
-  //double rho = cmdBlock.getFieldDouble("density"); 
-  //double E = cmdBlock.getFieldDouble("youngs modulus"); 
-  //double nu = cmdBlock.getFieldDouble("poissons ratio"); 
 
