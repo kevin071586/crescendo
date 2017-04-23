@@ -70,6 +70,14 @@ void Simulation::Execute()
   Epetra_FECrsMatrix stiffMatrix(Copy, epetraRowMap, numNonzeroEstimate);
   Epetra_FECrsMatrix massMatrix(Copy, epetraRowMap, numNonzeroEstimate);
 
+  ParserCmdBlock cmdBlock = m_parserData.getCmdBlock("finite element model");
+  const double rho = cmdBlock.getFieldDouble("density");
+  const double E = cmdBlock.getFieldDouble("youngs modulus");
+  const double nu = cmdBlock.getFieldDouble("poissons ratio");
+  std::cout << "Density: " << rho << std::endl;
+  std::cout << "Youngs Modulus: " << E << std::endl;
+  std::cout << "Poissons Ratio: " << nu << std::endl;
+
   elementBucketLoop(elementData, massMatrix, stiffMatrix);
 
   // Solve eigen problem
