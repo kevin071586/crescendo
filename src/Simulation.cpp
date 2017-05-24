@@ -33,6 +33,8 @@
 #include "Element.h"
 #include "Simulation.h"
 #include "ParserCmdBlock.h"
+#include "ElasticMaterial.h"
+#include "EigenSolver.h"
 
 
 // Constructor and destructor
@@ -274,9 +276,13 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
     fst::multiplyMeasure<double>(hexGValsTransformedWeighted, cellMeasure, 
         hexGValsTransformed);
 
+
+    // need # element DOF for both mass and stiffness matrices.  should
+    // move this to element data class ...
+    const int numElemDof = m_spatialDim*numFields;
+
    
     // TODO: ComputeElementMassMatrices(...)
-    const int numElemDof = m_spatialDim*numFields;
     const int RHO_TEMP = 1.0; // TODO: Read density from input deck
     FieldContainer<double> elemMassMatrix(numElements, numElemDof, numElemDof);
     elementData.integrateMassMatrix(elemMassMatrix, hexGValsTransformed, 
@@ -296,13 +302,49 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
     
 
     // TODO: ComputeElementStiffnessMatrices(...)
+    FieldContainer<double> hexGGradientTransformed(numElements, numFields, 
+        numCubPoints, m_spatialDim);
+    FieldContainer<double> hexGGradientTransformedWeighted(numElements, numFields,
+        numCubPoints, m_spatialDim);
+
+    // transform to physical coordinates.  Each cell has its own physical coordinates,
+    // so must have an array sized to accomodate each coordinate.
+    fst::HGRADtransformGRAD<double>(hexGGradientTransformed, hexJacobianInv, cubPointGradient);
+
+    // multiply measure
+    fst::multiplyMeasure<double>(hexGGradientTransformedWeighted, cellMeasure, 
+        hexGGradientTransformed);
+
+    // integrate element stiffness matrices for work set
+    FieldContainer<double> stiffnessMatrix(numElements, numElemDof, numElemDof);
+    const double E_TEMP = 10.0; // TODO: Read density from input deck
+    const double NU_TEMP = 0.0; // TODO: Read poissons ratio from input deck
+    ElasticMaterial elasticMat;
+    elasticMat.setYoungsModulus(E_TEMP);
+    elasticMat.setPoissonsRatio(NU_TEMP);
+    FieldContainer<double> C = elasticMat.stiffnessTensor();
+
+    elementData.integrateStiffnessMatrix(stiffnessMatrix, hexGGradientTransformed,
+      hexGGradientTransformedWeighted, C);
 
     // TODO: AsssembleStiffnessMatrix(...)
+    for(size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex){
+      for( int i=0; i<stiffnessMatrix.dimension(1); ++i ){
+        for( int j=0; j<stiffnessMatrix.dimension(2); ++j ){
+          int rowIdx = nodeDofGlobalIds(elemIndex, i);
+          int colIdx = nodeDofGlobalIds(elemIndex, j);
+          double value = stiffnessMatrix(elemIndex, i, j);
+          stiffMatrix.InsertGlobalValues(rowIdx, 1, &value, &colIdx);
+        }
+      }
+    }
+
 
   }
 
   // Call .GlobalAssemble() on mass and stiffness matrix
   massMatrix.GlobalAssemble();
+  stiffMatrix.GlobalAssemble();
   
   return;
 }

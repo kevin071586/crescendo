@@ -83,6 +83,8 @@ ADD_EXECUTABLE( crescendo
   ${CRESCENDO_DIR}/src/ParserUtil.cpp
   ${CRESCENDO_DIR}/src/ParserDictionary.cpp
   ${CRESCENDO_DIR}/src/Element.cpp
+  ${CRESCENDO_DIR}/src/ElasticMaterial.cpp
+  ${CRESCENDO_DIR}/src/EigenSolver.cpp
   )
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
