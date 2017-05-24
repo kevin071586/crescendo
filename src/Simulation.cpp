@@ -83,6 +83,11 @@ void Simulation::Execute()
   elementBucketLoop(elementData, massMatrix, stiffMatrix);
 
   // Solve eigen problem
+  EigenSolver eigSolver;
+  
+  // Wrap the MPI communicator so Epetra can use it
+  Epetra_MpiComm epetraComm(m_stkComm);
+  eigSolver.Solve(stiffMatrix, massMatrix, epetraComm); // TODO: working here, not well tested yet.
 
   // Eigenvalue problem post-processing
 
