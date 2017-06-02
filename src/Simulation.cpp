@@ -1,10 +1,9 @@
 // ----------------------------------------------------------------------------
 // TODO List:
 //  1) Function to write log file to given stream, one proc output only.
-//  2) Improve command line options (allow -i for input, for example)
-//  3) Handle some constants better -- like m_spatialDim, NODES_PER_HEX, etc.
+//  2) Handle some constants better -- like m_spatialDim, NODES_PER_HEX, etc.
 //     For example, NODES_PER_HEX can probably be evaluated based on element.
-//  4) ElementLoop() needs to be broken up into smaller functions.  Some sections
+//  3) ElementLoop() needs to be broken up into smaller functions.  Some sections
 //     can be moved into the Element calculation routine, like calculating the
 //     jacobians.  Perhaps matrix calculation could be done there as well, provided
 //     an input matrix to store data in?
