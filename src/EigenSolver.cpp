@@ -108,9 +108,14 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
   //
   //  Variables used for the Block Davidson Method
   //
+  //  NOTE: See https://trilinos.org/pipermail/trilinos-users/2008-September/000822.html
+  //  for some insight into choosing parameters.
+  //
   const int    nev         = 10;
-  const int    blockSize   = 10;
-  const int    numBlocks   = 2; //4;
+  //const int    blockSize   = 10;      // works with small cube problem
+  //const int    numBlocks   = 2; //4;  // works with small cube problem
+  const int    blockSize   = 30;    // works with large cube problem
+  const int    numBlocks   = 5;     // works with large cube problem
   const int    maxRestarts = 100;
   const double tol         = 1.0e-8;
 

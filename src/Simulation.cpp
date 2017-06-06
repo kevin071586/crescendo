@@ -1,9 +1,8 @@
 // ----------------------------------------------------------------------------
 // TODO List:
-//  1) Function to write log file to given stream, one proc output only.
-//  2) Handle some constants better -- like m_spatialDim, NODES_PER_HEX, etc.
+//  1) Handle some constants better -- like m_spatialDim, NODES_PER_HEX, etc.
 //     For example, NODES_PER_HEX can probably be evaluated based on element.
-//  3) ElementLoop() needs to be broken up into smaller functions.  Some sections
+//  2) ElementLoop() needs to be broken up into smaller functions.  Some sections
 //     can be moved into the Element calculation routine, like calculating the
 //     jacobians.  Perhaps matrix calculation could be done there as well, provided
 //     an input matrix to store data in?
@@ -14,10 +13,12 @@
 #include "Epetra_MpiComm.h"
 #include "Epetra_Map.h"
 #include "Epetra_FECrsMatrix.h"
+#include "Epetra_MultiVector.h"
 
 #include "stk_io/DatabasePurpose.hpp"           // for READ_MESH, WRITE_RESULTS, etc
 #include "stk_io/StkMeshIoBroker.hpp"           // for StkMeshIoBroker
 #include "stk_mesh/base/Field.hpp"              // for Field
+#include "stk_mesh/base/FieldParallel.hpp"      // for communicate_field_data
 #include <stk_mesh/base/GetEntities.hpp>        // for get_entities, count_entities
 #include "stk_mesh/base/MetaData.hpp"           // for MetaData
 #include "stk_mesh/base/CoordinateSystems.hpp"  // for Cartesian type
@@ -71,13 +72,6 @@ void Simulation::Execute()
   Epetra_FECrsMatrix stiffMatrix(Copy, epetraRowMap, numNonzeroEstimate);
   Epetra_FECrsMatrix massMatrix(Copy, epetraRowMap, numNonzeroEstimate);
 
-  ParserCmdBlock cmdBlock = m_parserData.getCmdBlock("finite element model");
-  const double rho = cmdBlock.getFieldDouble("density");
-  const double E = cmdBlock.getFieldDouble("youngs modulus");
-  const double nu = cmdBlock.getFieldDouble("poissons ratio");
-  std::cout << "Density: " << rho << std::endl;
-  std::cout << "Youngs Modulus: " << E << std::endl;
-  std::cout << "Poissons Ratio: " << nu << std::endl;
 
   elementBucketLoop(elementData, massMatrix, stiffMatrix);
 
@@ -88,8 +82,75 @@ void Simulation::Execute()
   Epetra_MpiComm epetraComm(m_stkComm);
   eigSolver.Solve(stiffMatrix, massMatrix, epetraComm); // TODO: working here, not well tested yet.
 
-  // Eigenvalue problem post-processing
+  // TODO: Refactor this --  Eigenvalue problem post-processing
+  
+  // Write output mesh
+  std::vector<double> freqs = *(eigSolver.m_eigen_values);
+  
+  // Get associated eigenvector
+  int num_evecs = freqs.size();
+  Epetra_MultiVector evecs = *eigSolver.m_eigen_vectors;
+  std::vector<double> evecs_data;
 
+  
+  std::vector<unsigned> entityCounts;
+  stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
+  stk::mesh::Selector localSelector = m_ioBroker.meta_data().locally_owned_part();
+  stk::mesh::count_entities(localSelector, bulkData, entityCounts);
+  const int numLocalNodes = entityCounts[stk::topology::NODE_RANK];
+  const int num_local_DOF = m_spatialDim*numLocalNodes;
+
+  evecs_data.reserve(num_evecs*num_local_DOF);
+  evecs.ExtractCopy(&evecs_data[0], num_local_DOF);
+  std::cout << "Epetra_MV Num Vectors: " << evecs.NumVectors() << std::endl;
+  std::cout << "Epetra_MV My Length:   " << evecs.MyLength() << std::endl;
+
+  
+  // TODO: should define field types elsewhere
+  //
+  // TODO: Trying to figure out how to 'get' the displacement field off of the results
+  // mesh so that I can write out to it after solving the problem ... a few linew below
+  // remain commented, and I am uncommenting them as I work through this.
+  // ------------------------------------------------------------------------------
+  typedef stk::mesh::Field<double, stk::mesh::Cartesian3d> VectorField;
+  VectorField* displacementsField = m_ioBroker.meta_data().get_field<VectorField>(stk::topology::NODE_RANK,
+                                                                    "displacements");
+
+  // stk::mesh::FieldBase& displacementsField = *m_ioBroker.meta_data().get_field<VectorField>(
+  //                                             stk::topology::NODE_RANK,
+  //                                             "displacements");
+
+  std::vector<const stk::mesh::FieldBase*> field_list(1, displacementsField);
+
+  // DUPLICATE CODE TO GET NODEBUCKETS:
+  const stk::mesh::BucketVector nodeBuckets = 
+    bulkData.get_buckets(stk::topology::NODE_RANK, localSelector);
+
+  for (int i = 0; i < freqs.size(); ++i) {
+    m_ioBroker.begin_output_step(exoOutputMesh, freqs[i]);
+    for (size_t bucketIndex = 0; bucketIndex < nodeBuckets.size(); ++bucketIndex) {
+      stk::mesh::Bucket &nodeBucket = *nodeBuckets[bucketIndex];
+      double* displacementDataForBucket = stk::mesh::field_data(*displacementsField, nodeBucket);
+      
+      for (size_t nodeIndex = 0; nodeIndex < nodeBucket.size(); ++nodeIndex) {
+        stk::mesh::Entity node = nodeBucket[nodeIndex];
+        int local_id = bulkData.local_id(node);
+        displacementDataForBucket[m_spatialDim*nodeIndex + 0] = evecs_data[0 + m_spatialDim*local_id + i*num_local_DOF];
+        displacementDataForBucket[m_spatialDim*nodeIndex + 1] = evecs_data[1 + m_spatialDim*local_id + i*num_local_DOF];
+        displacementDataForBucket[m_spatialDim*nodeIndex + 2] = evecs_data[2 + m_spatialDim*local_id + i*num_local_DOF];
+      }
+    }
+
+    // Send field data for shared nodes across to the other processors.
+    // This communication is necessary to ensure that we don't get a 
+    // bunch of zeros on nodes which are shared (but not owned).  This
+    // must come before any write commands.
+    stk::mesh::communicate_field_data(m_ioBroker.bulk_data(), field_list);
+
+    // Write the output step to disk.
+    m_ioBroker.write_defined_output_fields(exoOutputMesh);
+    m_ioBroker.end_output_step(exoOutputMesh);
+  }
 
   return; 
 }
@@ -228,6 +289,15 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
   // Get reference to bulk_data ... I'll use it a lot here.
   stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
 
+  ParserCmdBlock cmdBlock = m_parserData.getCmdBlock("finite element model");
+  const double rho = cmdBlock.getFieldDouble("density");
+  const double E = cmdBlock.getFieldDouble("youngs modulus");
+  const double nu = cmdBlock.getFieldDouble("poissons ratio");
+  std::cout << "Density: " << rho << std::endl;
+  std::cout << "Youngs Modulus: " << E << std::endl;
+  std::cout << "Poissons Ratio: " << nu << std::endl;
+   
+
   // Define some important dimensions
   const int numCubPoints = elementData.m_numCubPoints;
   const int numFields = elementData.m_numFields;
@@ -271,7 +341,6 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
     CellTools<double>::setJacobianInv(hexJacobianInv, hexJacobian);
     CellTools<double>::setJacobianDet(hexJacobianDet, hexJacobian);
     
-    // TODO: 
     // simply replicates input cubPointValues for all cells in the set.
     fst::HGRADtransformVALUE<double>(hexGValsTransformed, cubPointValues);
 
@@ -285,14 +354,12 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
     // move this to element data class ...
     const int numElemDof = m_spatialDim*numFields;
 
-   
-    // TODO: ComputeElementMassMatrices(...)
-    const int RHO_TEMP = 1.0; // TODO: Read density from input deck
+    // ComputeElementMassMatrices(...)
     FieldContainer<double> elemMassMatrix(numElements, numElemDof, numElemDof);
     elementData.integrateMassMatrix(elemMassMatrix, hexGValsTransformed, 
-        hexGValsTransformedWeighted, RHO_TEMP, m_spatialDim);
+        hexGValsTransformedWeighted, rho, m_spatialDim);
     
-    // TODO: AssembleMassMatrix(...)
+    // AssembleMassMatrix(...)
     for (size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex) {
       for (int i=0; i < elemMassMatrix.dimension(1); ++i) {
         for (int j=0; j < elemMassMatrix.dimension(2); ++j) {
@@ -305,7 +372,7 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
     }
     
 
-    // TODO: ComputeElementStiffnessMatrices(...)
+    // ComputeElementStiffnessMatrices(...)
     FieldContainer<double> hexGGradientTransformed(numElements, numFields, 
         numCubPoints, m_spatialDim);
     FieldContainer<double> hexGGradientTransformedWeighted(numElements, numFields,
@@ -321,17 +388,15 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
 
     // integrate element stiffness matrices for work set
     FieldContainer<double> stiffnessMatrix(numElements, numElemDof, numElemDof);
-    const double E_TEMP = 10.0; // TODO: Read density from input deck
-    const double NU_TEMP = 0.0; // TODO: Read poissons ratio from input deck
     ElasticMaterial elasticMat;
-    elasticMat.setYoungsModulus(E_TEMP);
-    elasticMat.setPoissonsRatio(NU_TEMP);
+    elasticMat.setYoungsModulus(E);
+    elasticMat.setPoissonsRatio(nu);
     FieldContainer<double> C = elasticMat.stiffnessTensor();
 
     elementData.integrateStiffnessMatrix(stiffnessMatrix, hexGGradientTransformed,
       hexGGradientTransformedWeighted, C);
 
-    // TODO: AsssembleStiffnessMatrix(...)
+    // AsssembleStiffnessMatrix(...)
     for(size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex){
       for( int i=0; i<stiffnessMatrix.dimension(1); ++i ){
         for( int j=0; j<stiffnessMatrix.dimension(2); ++j ){
