@@ -109,7 +109,7 @@ void Simulation::Execute()
   // TODO: should define field types elsewhere
   //
   // TODO: Trying to figure out how to 'get' the displacement field off of the results
-  // mesh so that I can write out to it after solving the problem ... a few linew below
+  // mesh so that I can write out to it after solving the problem ... a few lines below
   // remain commented, and I am uncommenting them as I work through this.
   // ------------------------------------------------------------------------------
   typedef stk::mesh::Field<double, stk::mesh::Cartesian3d> VectorField;
