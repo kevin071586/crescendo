@@ -24,6 +24,9 @@
 #include "EpetraExt_MatrixMatrix.h"
 
 
+// Constructor
+EigenSolver::EigenSolver() {
+}
 
 int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetra_MpiComm& Comm)
 {
