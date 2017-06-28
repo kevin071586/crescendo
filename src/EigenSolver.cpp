@@ -1,6 +1,4 @@
 #include <EigenSolver.h>
-//RCP<Epetra_FECrsMatrix> K = rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
-//RCP<Epetra_FECrsMatrix> M = rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
 
 #include "AnasaziConfigDefs.hpp"
 #include "AnasaziBasicEigenproblem.hpp"
@@ -17,10 +15,6 @@
 #include "Epetra_SerialComm.h"
 #endif
 #include "Epetra_Map.h"
-
-#include "ModeLaplace2DQ2.h"
-
-// Include EpetraExt MatrixMatrix helpers.
 #include "EpetraExt_MatrixMatrix.h"
 
 
@@ -28,72 +22,21 @@
 EigenSolver::EigenSolver() {
 }
 
-int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetra_MpiComm& Comm)
-{
-// #ifdef HAVE_MPI
-//   // Initialize MPI
-//   //
-//   MPI_Init(&argc,&argv);
-// #endif
-// 
-//   // Create an Epetra communicator
-//   //
-// #ifdef HAVE_MPI
-//   Epetra_MpiComm Comm(MPI_COMM_WORLD);
-// #else
-//   Epetra_SerialComm Comm;
-// #endif
+int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, 
+                        Epetra_MpiComm& Comm) {
 
   // Create an Anasazi output manager
-  //
   Anasazi::BasicOutputManager<double> printer;
   printer.stream(Anasazi::Errors) << Anasazi::Anasazi_Version() << std::endl << std::endl;
 
   // Get the sorting string from the command line
-  //
   std::string which("SM");
   Teuchos::CommandLineProcessor cmdp(false,true);
-//   cmdp.setOption("sort",&which,"Targetted eigenvalues (SM or LM).");
-//   if (cmdp.parse(argc,argv) != Teuchos::CommandLineProcessor::PARSE_SUCCESSFUL) {
-// #ifdef HAVE_MPI
-//     MPI_Finalize();
-// #endif
-//     return -1;
-//   }
-//
-//  //
-//  // Number of dimension of the domain
-//  const int space_dim = 2;
-//
-//  //
-//  // Size of each of the dimensions of the domain
-//  std::vector<double> brick_dim( space_dim );
-//  brick_dim[0] = 1.0;
-//
-//  brick_dim[1] = 1.0;
-//
-//  //
-//  // Number of elements in each of the dimensions of the domain
-//  std::vector<int> elements( space_dim );
-//  elements[0] = 10;
-//  elements[1] = 10;
-//
-//  //
-//  // get test problem
-//  Teuchos::RCP<ModalProblem> testCase = 
-//    Teuchos::rcp( new ModeLaplace2DQ2(Comm, brick_dim[0], elements[0], brick_dim[1], elements[1]) );
-//
-//   //
-//   // Get the stiffness and mass matrices from the test problem
-//   Teuchos::RCP<Epetra_CrsMatrix> K = Teuchos::rcp( const_cast<Epetra_CrsMatrix *>(testCase->getStiffness()), false );
-//   Teuchos::RCP<Epetra_CrsMatrix> M = Teuchos::rcp( const_cast<Epetra_CrsMatrix *>(testCase->getMass()), false );
-  
+
   Teuchos::RCP<Epetra_FECrsMatrix> K = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
   Teuchos::RCP<Epetra_FECrsMatrix> M = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
 
-  //===================================================
   // Create the shifted system K - sigma * M.
-
   double sigma = 1.0;
   Teuchos::RCP<Epetra_CrsMatrix> Kshift = Teuchos::rcp( new Epetra_CrsMatrix( *K ) );
 
@@ -102,7 +45,6 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
     printer.print(Anasazi::Errors,"EpetraExt::MatrixMatrix::Add returned with error.\n");
     return -1;
   }
-  //===================================================
 
 
   //************************************
@@ -115,10 +57,8 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
   //  for some insight into choosing parameters.
   //
   const int    nev         = 10;
-  //const int    blockSize   = 10;      // works with small cube problem
-  //const int    numBlocks   = 2; //4;  // works with small cube problem
-  const int    blockSize   = 30;    // works with large cube problem
-  const int    numBlocks   = 5;     // works with large cube problem
+  const int    blockSize   = 10;
+  const int    numBlocks   = 2;
   const int    maxRestarts = 100;
   const double tol         = 1.0e-8;
 
@@ -128,63 +68,43 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
 
   // Create an Epetra_MultiVector for an initial vector to start the solver.
   // Note:  This needs to have the same number of columns as the blocksize.
-  //
   Teuchos::RCP<Epetra_MultiVector> ivec = Teuchos::rcp( new Epetra_MultiVector(K->OperatorDomainMap(), blockSize) );
   ivec->Random();
 
-  // Create the eigenproblem.
-  //
-//  Teuchos::RCP<Anasazi::BasicEigenproblem<double, MV, OP> > MyProblem =
-//    Teuchos::rcp( new Anasazi::BasicEigenproblem<double, MV, OP>(K, M, ivec) );
-//
-
-  //====================== SHIFTED VERSION ======================================
+  // Create the eigenproblem & define symmetry
   Teuchos::RCP<Anasazi::BasicEigenproblem<double, MV, OP> > MyProblem =
     Teuchos::rcp( new Anasazi::BasicEigenproblem<double, MV, OP>(Kshift, M, ivec) );
-  //=============================================================================
 
-  // Inform the eigenproblem that the operator A is symmetric
-  //
   MyProblem->setHermitian(true);
 
-  // Set the number of eigenvalues requested
-  //
   MyProblem->setNEV( nev );
 
-  // Inform the eigenproblem that you are finishing passing it information
-  //
+  // Done providing information to eigenproblem
   bool boolret = MyProblem->setProblem();
   if (boolret != true) {
     printer.print(Anasazi::Errors,"Anasazi::BasicEigenproblem::setProblem() returned an error.\n");
-// #ifdef HAVE_MPI
-//     MPI_Finalize();
-// #endif
     return -1;
   }
 
   // Create parameter list to pass into the solver manager
-  //
   Teuchos::ParameterList MyPL;
   MyPL.set( "Which", which );
   MyPL.set( "Block Size", blockSize );
   MyPL.set( "Num Blocks", numBlocks );
   MyPL.set( "Maximum Restarts", maxRestarts );
   MyPL.set( "Convergence Tolerance", tol );
-  //
+
   // Create the solver manager
   Anasazi::BlockDavidsonSolMgr<double, MV, OP> MySolverMan(MyProblem, MyPL);
 
   // Solve the problem
-  //
   Anasazi::ReturnType returnCode = MySolverMan.solve();
 
   // Get the eigenvalues and eigenvectors from the eigenproblem
-  //
   Anasazi::Eigensolution<double,MV> sol = MyProblem->getSolution();
   std::vector<Anasazi::Value<double> > evals = sol.Evals;
   Teuchos::RCP<MV> evecs = sol.Evecs;
 
-  //===========================================================
   // Undo shift transformation; computed eigenvalues are real
   int numev = sol.numVecs;
   std::vector<double> compEvals(numev);
@@ -196,10 +116,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
   m_eigen_values = &compEvals;
   m_eigen_vectors = sol.Evecs;
 
-  //===========================================================
-
   // Compute residuals.
-  //
   std::vector<double> normR(sol.numVecs);
   if (sol.numVecs > 0) {
     Teuchos::SerialDenseMatrix<int,double> T(sol.numVecs, sol.numVecs);
@@ -216,7 +133,6 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
   }
 
   // Print the results
-  //
   std::ostringstream os;
   os.setf(std::ios_base::right, std::ios_base::adjustfield);
   os<<"Solver manager returned " << (returnCode == Anasazi::Converged ? "converged." : "unconverged.") << std::endl;
@@ -235,9 +151,6 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
   os<<"------------------------------------------------------"<<std::endl;
   printer.print(Anasazi::Errors,os.str());
 
-// #ifdef HAVE_MPI
-//   MPI_Finalize();
-// #endif
   return 0;
 }
 
@@ -247,19 +160,6 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetr
 
 int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetra_MpiComm& Comm) {
   using namespace Anasazi;
-
-
-// #ifdef HAVE_MPI
-//   // Initialize MPI
-//   MPI_Init(&argc,&argv);
-// #endif
-// 
-//   // Create an Epetra communicator
-// #ifdef HAVE_MPI
-//   Epetra_MpiComm Comm(MPI_COMM_WORLD);
-// #else
-//   Epetra_SerialComm Comm;
-// #endif
 
   //************************************
   // Get the parameters from the command line
@@ -288,13 +188,6 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat,
   cmdp.setOption("usePrec","noPrec",&usePrec,"Use Ifpack for preconditioning.");
   cmdp.setOption("prec_dropTol",&prec_dropTol,"Preconditioner: drop tolerance.");
   cmdp.setOption("prec_lofill",&prec_lofill,"Preconditioner: level of fill.");
-//   if (cmdp.parse(argc,argv) != Teuchos::CommandLineProcessor::PARSE_SUCCESSFUL) {
-// #ifdef HAVE_MPI
-//     MPI_Finalize();
-// #endif
-//     return -1;
-//   }
-
 
 
   //************************************
@@ -317,28 +210,7 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat,
   typedef Epetra_Operator OP;
   typedef MultiVecTraits<double, Epetra_MultiVector> MVT;
 
-  // //************************************
-  // // Create the problem matrices
-  // //************************************
-  // //
-  // printer.stream(Errors) << "Generating problem matrices..." << std::flush;
-  // // Number of dimension of the domain
-  // const int space_dim = 2;
-  // // Size of each of the dimensions of the domain
-  // std::vector<double> brick_dim( space_dim );
-  // brick_dim[0] = 1.0;
-  // brick_dim[1] = 1.0;
-  // // Number of elements in each of the dimensions of the domain
-  // std::vector<int> elements( space_dim );
-  // elements[0] = numElements;
-  // elements[1] = numElements;
-  // // Create problem
-  // Teuchos::RCP<ModalProblem> testCase =
-  //   Teuchos::rcp( new ModeLaplace2DQ2(Comm, brick_dim[0], elements[0], brick_dim[1], elements[1]) );
-  // // Get the stiffness and mass matrices
-  // Teuchos::RCP<Epetra_CrsMatrix> K = Teuchos::rcp( const_cast<Epetra_CrsMatrix *>(testCase->getStiffness()), false );
-  // Teuchos::RCP<Epetra_CrsMatrix> M = Teuchos::rcp( const_cast<Epetra_CrsMatrix *>(testCase->getMass()), false );
-  
+  // Mass and stiffness matrices
   Teuchos::RCP<Epetra_FECrsMatrix> K = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
   Teuchos::RCP<Epetra_FECrsMatrix> M = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
 
@@ -383,23 +255,20 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat,
   Teuchos::RCP<Epetra_MultiVector> ivec
     = Teuchos::rcp( new Epetra_MultiVector(K->OperatorDomainMap(), blockSize) );
   ivec->Random();
-  // Create the eigenproblem.
-  //
+
+  // Create the eigenproblem and define symmetry
   Teuchos::RCP<BasicEigenproblem<double, MV, OP> > MyProblem =
     Teuchos::rcp( new BasicEigenproblem<double, MV, OP>(K, M, ivec) );
-  // Inform the eigenproblem that the operator K is symmetric
-  //
+
   MyProblem->setHermitian(true);
-  // Pass the preconditioner to the eigenproblem
-  //
+
   if (usePrec) {
     MyProblem->setPrec(PrecOp);
   }
-  // Set the number of eigenvalues requested
-  //
+
   MyProblem->setNEV( nev );
-  // Inform the eigenproblem that you are finishing passing it information
-  //
+
+  // Done passing eigenproblem information
   bool boolret = MyProblem->setProblem();
   if (boolret != true) {
     printer.print(Errors,"Anasazi::BasicEigenproblem::setProblem() returned an error.\n");
@@ -409,11 +278,7 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat,
     return -1;
   }
 
-
-  //************************************
-  // Create parameter list to pass into the solver manager
-  //************************************
-  //
+  // Parameter list for eigenproblem
   Teuchos::ParameterList MyPL;
   MyPL.set( "Verbosity", verbosity );
   MyPL.set( "Which", which );
@@ -421,15 +286,11 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat,
   MyPL.set( "Num Blocks", numBlocks );
   MyPL.set( "Maximum Restarts", maxRestarts );
   MyPL.set( "Convergence Tolerance", tol );
-  //
+  
   // Create the solver manager
   BlockDavidsonSolMgr<double, MV, OP> MySolverMan(MyProblem, MyPL);
 
-
-  //************************************
   // Solve the problem
-  //************************************
-  //
   printer.stream(Errors) << "Solving eigenvalue problem..." << std::endl;
   ReturnType returnCode = MySolverMan.solve();
   // print some precond info
@@ -437,20 +298,12 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat,
     printer.stream(FinalSummary) << *prec << std::endl;
   }
 
-
-  //************************************
   // Get the eigenvalues and eigenvectors from the eigenproblem
-  //************************************
-  //
   Eigensolution<double,MV> sol = MyProblem->getSolution();
   std::vector<Value<double> > evals = sol.Evals;
   Teuchos::RCP<MV> evecs = sol.Evecs;
 
-
-  //************************************
-  // Compute residuals, just for funsies
-  //************************************
-  //
+  // Compute the residuals
   std::vector<double> normR(sol.numVecs);
   if (sol.numVecs > 0) {
     Teuchos::SerialDenseMatrix<int,double> T(sol.numVecs, sol.numVecs);
@@ -466,11 +319,7 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat,
     MVT::MvNorm( Kvec, normR );
   }
 
-
-  //************************************
   // Print the results
-  //************************************
-  //
   std::ostringstream os;
   os.setf(std::ios_base::right, std::ios_base::adjustfield);
   os<<"Solver manager returned " << (returnCode == Converged ? "converged." : "unconverged.") << std::endl;
@@ -488,9 +337,7 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat,
   os<<"------------------------------------------------------"<<std::endl;
   printer.print(Errors,os.str());
 
-// #ifdef HAVE_MPI
-//   MPI_Finalize();
-// #endif
+
   return 0;
 }
 
