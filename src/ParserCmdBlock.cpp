@@ -28,9 +28,6 @@ void ParserCmdBlock::addKeyValuePair(std::string key, std::string value)
   //        cmdBlock.getParamInt("keyName") maybe?
 
   m_paramVal[key] = value;
-
-  std::cout << "Adding to block " << m_name << ": " 
-            << "Key: " << key << ", Value: " << value << std::endl;
   return;
 }
 
