@@ -19,11 +19,13 @@
 
 
 // Constructor
-EigenSolver::EigenSolver() {
+EigenSolver::EigenSolver(stk::ParallelMachine stkComm) {
+  m_stkComm = stkComm;
 }
 
-int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, 
-                        Epetra_MpiComm& Comm) {
+int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
+
+  Epetra_MpiComm Comm(m_stkComm);
 
   // Create an Anasazi output manager
   Anasazi::BasicOutputManager<double> printer;
@@ -158,8 +160,10 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat,
 #include "Ifpack.h"
 #include "Epetra_InvOperator.h"
 
-int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat, Epetra_MpiComm& Comm) {
+int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   using namespace Anasazi;
+
+  Epetra_MpiComm Comm(m_stkComm);
 
   //************************************
   // Get the parameters from the command line
