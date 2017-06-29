@@ -26,6 +26,19 @@ EigenSolver::EigenSolver(stk::ParallelMachine stkComm) {
 int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   outputP0 << "Solving Eigenproblem ..." << std::endl << std::endl;
 
+  //
+  //  Variables used for the Block Davidson Method
+  //
+  //  NOTE: See https://trilinos.org/pipermail/trilinos-users/2008-September/000822.html
+  //  for some insight into choosing parameters.
+  //
+  const int    nev         = m_solverParams.getFieldInt("number of modes");
+  const int    blockSize   = m_solverParams.getFieldInt("block size");
+  const int    numBlocks   = m_solverParams.getFieldInt("number of blocks");
+  const int    maxRestarts = m_solverParams.getFieldInt("maximum restarts");
+  const double tol         = m_solverParams.getFieldDouble("target residual");
+  const double shift       = m_solverParams.getFieldDouble("shift");
+
   // Create an Anasazi output manager
   Anasazi::BasicOutputManager<double> printer;
   printer.setOStream(Teuchos::rcp(&outputP0, false));
@@ -43,7 +56,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   Teuchos::RCP<Epetra_FECrsMatrix> M = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
 
   // Create the shifted system K - sigma * M.
-  double sigma = 1.0;
+  double sigma = shift;
   Teuchos::RCP<Epetra_CrsMatrix> Kshift = Teuchos::rcp( new Epetra_CrsMatrix( *K ) );
 
   int addErr = EpetraExt::MatrixMatrix::Add( *M, false, -sigma, *Kshift, 1.0 );
@@ -51,22 +64,6 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
     printer.print(Anasazi::Errors,"EpetraExt::MatrixMatrix::Add returned with error.\n");
     return -1;
   }
-
-
-  //************************************
-  // Call the Block Davidson solver manager
-  //***********************************
-  //
-  //  Variables used for the Block Davidson Method
-  //
-  //  NOTE: See https://trilinos.org/pipermail/trilinos-users/2008-September/000822.html
-  //  for some insight into choosing parameters.
-  //
-  const int    nev         = m_solverParams.getFieldInt("number of modes");
-  const int    blockSize   = m_solverParams.getFieldInt("block size");
-  const int    numBlocks   = m_solverParams.getFieldInt("number of blocks");
-  const int    maxRestarts = m_solverParams.getFieldInt("maximum restarts");
-  const double tol         = m_solverParams.getFieldInt("target residual");
 
   // Preconditioner parameters
   bool usePrec = false;      

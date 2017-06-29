@@ -17,12 +17,12 @@ ParserDictionary::ParserDictionary()
   addCmdBlock("solver parameters", false);
 
   addCmdBlock("eigen solver", false);
-  addCmdBlockKey("number of modes", keyType::KEY_INT, false);
+  addCmdBlockKey("number of modes", keyType::KEY_INT, true);
   addCmdBlockKey("block size", keyType::KEY_INT, false);
   addCmdBlockKey("number of blocks", keyType::KEY_INT, false);
   addCmdBlockKey("maximum restarts", keyType::KEY_INT, false);
   addCmdBlockKey("target residual", keyType::KEY_DOUBLE, false);
-
+  addCmdBlockKey("shift", keyType::KEY_DOUBLE, false);
 
   addCmdBlock("results output", false);
   addCmdBlockKey("database name",          keyType::KEY_STRING, true);
