@@ -13,7 +13,7 @@
 
 #include <EigenSolver.h>
 
-#include "stk_util/environment/OutputLog.hpp"
+
 
 // Constructor
 EigenSolver::EigenSolver(stk::ParallelMachine stkComm) {
@@ -24,7 +24,6 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
   Epetra_MpiComm Comm(m_stkComm);
 
-  std::ostream& outputP0 = *(stk::get_log_ostream("output"));
   outputP0 << "Solving Eigenproblem ..." << std::endl;
 
   // Create an Anasazi output manager
@@ -118,40 +117,10 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   m_eigen_values = &compEvals;
   m_eigen_vectors = sol.Evecs;
 
-  // Compute residuals.
-  std::vector<double> normR(sol.numVecs);
-  if (sol.numVecs > 0) {
-    Teuchos::SerialDenseMatrix<int,double> T(sol.numVecs, sol.numVecs);
-    Epetra_MultiVector Kvec( K->OperatorDomainMap(), evecs->NumVectors() );
-    Epetra_MultiVector Mvec( M->OperatorDomainMap(), evecs->NumVectors() );
-    T.putScalar(0.0); 
-    for (int i=0; i<sol.numVecs; i++) {
-      T(i,i) = evals[i].realpart;
-    }
-    K->Apply( *evecs, Kvec );  
-    M->Apply( *evecs, Mvec );  
-    MVT::MvTimesMatAddMv( -1.0, Mvec, T, 1.0, Kvec );
-    MVT::MvNorm( Kvec, normR );
-  }
+  computePrintResiduals(Kmat, Mmat, sol, returnCode, compEvals);
 
-  // Print the results
   std::ostringstream os;
-  os.setf(std::ios_base::right, std::ios_base::adjustfield);
-  os<<"Solver manager returned " << (returnCode == Anasazi::Converged ? "converged." : "unconverged.") << std::endl;
-  os<<std::endl;
-  os<<"------------------------------------------------------"<<std::endl;
-  os<<std::setw(16)<<"Eigenvalue"
-    <<std::setw(18)<<"Direct Residual"
-    <<std::endl;
-  os<<"------------------------------------------------------"<<std::endl;
-  for (int i=0; i<sol.numVecs; i++) {
-    //os<<std::setw(16)<<evals[i].realpart
-    os<<std::setw(16)<<compEvals[i]
-      <<std::setw(18)<<normR[i]/evals[i].realpart
-      <<std::endl;
-  }
-  os<<"------------------------------------------------------"<<std::endl;
-  printer.print(Anasazi::Errors,os.str());
+  printer.print(Anasazi::Errors, os.str());
 
   return 0;
 }
@@ -260,9 +229,6 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat)
   bool boolret = MyProblem->setProblem();
   if (boolret != true) {
     printer.print(Errors,"Anasazi::BasicEigenproblem::setProblem() returned an error.\n");
-#ifdef HAVE_MPI
-    MPI_Finalize();
-#endif
     return -1;
   }
 
@@ -291,41 +257,72 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat)
   std::vector<Value<double> > evals = sol.Evals;
   Teuchos::RCP<MV> evecs = sol.Evecs;
 
-  // Compute the residuals
-  std::vector<double> normR(sol.numVecs);
-  if (sol.numVecs > 0) {
-    Teuchos::SerialDenseMatrix<int,double> T(sol.numVecs, sol.numVecs);
-    Epetra_MultiVector Kvec( K->OperatorDomainMap(), evecs->NumVectors() );
-    Epetra_MultiVector Mvec( M->OperatorDomainMap(), evecs->NumVectors() );
-    T.putScalar(0.0);
-    for (int i=0; i<sol.numVecs; i++) {
-      T(i,i) = evals[i].realpart;
-    }
-    K->Apply( *evecs, Kvec );
-    M->Apply( *evecs, Mvec );
-    MVT::MvTimesMatAddMv( -1.0, Mvec, T, 1.0, Kvec );
-    MVT::MvNorm( Kvec, normR );
+  std::vector<double> compEvals(sol.numVecs);
+  for (int i=0; i<sol.numVecs; ++i) {
+    compEvals[i] = evals[i].realpart;
   }
+  computePrintResiduals(Kmat, Mmat, sol, returnCode, compEvals);
 
-  // Print the results
   std::ostringstream os;
-  os.setf(std::ios_base::right, std::ios_base::adjustfield);
-  os<<"Solver manager returned " << (returnCode == Converged ? "converged." : "unconverged.") << std::endl;
-  os<<std::endl;
-  os<<"------------------------------------------------------"<<std::endl;
-  os<<std::setw(16)<<"Eigenvalue"
-    <<std::setw(18)<<"Direct Residual"
-    <<std::endl;
-  os<<"------------------------------------------------------"<<std::endl;
-  for (int i=0; i<sol.numVecs; i++) {
-    os<<std::setw(16)<<evals[i].realpart
-      <<std::setw(18)<<normR[i]/evals[i].realpart
-      <<std::endl;
-  }
-  os<<"------------------------------------------------------"<<std::endl;
   printer.print(Errors,os.str());
-
 
   return 0;
 }
 
+//-------------------------------------------------------------------
+// Compute and print residuals for an eigen problem.
+//
+// TODO: Simplify this interface.. passing too many parameters in 
+// for what this function does, some of this should be stored in the
+// EigenSolver class itself as member variables or something.
+//
+void EigenSolver::computePrintResiduals(const Epetra_FECrsMatrix& K, 
+              const Epetra_FECrsMatrix& M,
+              Anasazi::Eigensolution<double, Epetra_MultiVector> sol,
+              Anasazi::ReturnType returnCode,
+              std::vector<double> compEvals) {
+
+  typedef Epetra_MultiVector MV;
+  typedef Epetra_Operator OP;
+  typedef Anasazi::MultiVecTraits<double, Epetra_MultiVector> MVT;
+
+  // Get eigenvectors & eigenvalues from solution 
+  std::vector<Anasazi::Value<double> > evals = sol.Evals;
+  Teuchos::RCP<MV> evecs = sol.Evecs;
+  
+  // Compute the residuals
+  std::vector<double> normR(sol.numVecs);
+
+  if (sol.numVecs > 0) {
+    Teuchos::SerialDenseMatrix<int,double> T(sol.numVecs, sol.numVecs);
+    Epetra_MultiVector Kvec(K.OperatorDomainMap(), evecs->NumVectors());
+    Epetra_MultiVector Mvec(M.OperatorDomainMap(), evecs->NumVectors());
+    T.putScalar(0.0);
+    for (int i=0; i<sol.numVecs; i++) {
+      T(i,i) = evals[i].realpart;
+    }
+    K.Apply( *evecs, Kvec );
+    M.Apply( *evecs, Mvec );
+    MVT::MvTimesMatAddMv( -1.0, Mvec, T, 1.0, Kvec );
+    MVT::MvNorm( Kvec, normR );
+  }
+
+    // Print the results
+  outputP0.setf(std::ios_base::right, std::ios_base::adjustfield);
+  outputP0 << "Solver manager returned " << (returnCode == Anasazi::Converged ? "converged." : "unconverged.") << std::endl;
+  outputP0 << std::endl;
+  outputP0 << "------------------------------------------------------" << std::endl;
+  outputP0 << std::setw(16)<<"Eigenvalue"
+           << std::setw(18)<<"Direct Residual"
+           << std::endl;
+  outputP0 << "------------------------------------------------------" << std::endl;
+
+  for (int i=0; i<sol.numVecs; i++) {
+    outputP0 << std::setw(16) << compEvals[i]
+             << std::setw(18) << normR[i]/evals[i].realpart
+             << std::endl;
+  }
+  outputP0 << "------------------------------------------------------" << std::endl;
+
+  return;
+}
