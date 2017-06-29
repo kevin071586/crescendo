@@ -26,7 +26,7 @@ begin eigen solver my_solver
   number of modes = 10
   block size = 10
   number of blocks = 2
-  maximum restarts = 100
+  maximum restarts = 50
   target residual = 1e-8
 end
 

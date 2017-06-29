@@ -7,7 +7,6 @@
 #include "AnasaziEpetraAdapter.hpp"
 #include "Epetra_CrsMatrix.h"
 
-#include "Epetra_MpiComm.h"
 #include "Epetra_Map.h"
 #include "EpetraExt_MatrixMatrix.h"
 
@@ -21,9 +20,6 @@ EigenSolver::EigenSolver(stk::ParallelMachine stkComm) {
 }
 
 int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
-
-  Epetra_MpiComm Comm(m_stkComm);
-
   outputP0 << "Solving Eigenproblem ..." << std::endl << std::endl;
 
   // Create an Anasazi output manager
@@ -128,8 +124,6 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
 int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   using namespace Anasazi;
-
-  Epetra_MpiComm Comm(m_stkComm);
 
   //************************************
   // Get the parameters from the command line
