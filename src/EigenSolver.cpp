@@ -24,10 +24,11 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
   Epetra_MpiComm Comm(m_stkComm);
 
-  outputP0 << "Solving Eigenproblem ..." << std::endl;
+  outputP0 << "Solving Eigenproblem ..." << std::endl << std::endl;
 
   // Create an Anasazi output manager
   Anasazi::BasicOutputManager<double> printer;
+  printer.setOStream(Teuchos::rcp(&outputP0, false));
   printer.stream(Anasazi::Errors) << Anasazi::Anasazi_Version() << std::endl << std::endl;
 
   Teuchos::RCP<Epetra_FECrsMatrix> K = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
