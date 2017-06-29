@@ -10,6 +10,10 @@
 #include "Epetra_Map.h"
 #include "EpetraExt_MatrixMatrix.h"
 
+// Include header for Ifpack incomplete Cholesky preconditioner
+#include "Ifpack.h"
+#include "Epetra_InvOperator.h"
+
 #include <EigenSolver.h>
 
 
@@ -25,6 +29,14 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   // Create an Anasazi output manager
   Anasazi::BasicOutputManager<double> printer;
   printer.setOStream(Teuchos::rcp(&outputP0, false));
+
+  // Set verbosity level
+  bool verbose = false;    // Move this to input deck
+  int verbosity = Anasazi::Errors + Anasazi::Warnings;
+  if (verbose) {
+    verbosity += Anasazi::FinalSummary + Anasazi::TimingDetails;
+  }
+
   printer.stream(Anasazi::Errors) << Anasazi::Anasazi_Version() << std::endl << std::endl;
 
   Teuchos::RCP<Epetra_FECrsMatrix> K = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
@@ -56,9 +68,41 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   const int    maxRestarts = m_solverParams.getFieldInt("maximum restarts");
   const double tol         = m_solverParams.getFieldInt("target residual");
 
+  // Preconditioner parameters
+  bool usePrec = true;      
+  double prec_dropTol = 1e-4;
+  int prec_lofill = 0;
+
   typedef Epetra_MultiVector MV;
   typedef Epetra_Operator OP;
   typedef Anasazi::MultiVecTraits<double, Epetra_MultiVector> MVT;
+
+  //************************************
+  // Select the Preconditioner
+  //************************************
+  //
+  Teuchos::RCP<Ifpack_Preconditioner> prec;
+  Teuchos::RCP<Epetra_Operator> PrecOp;
+  if (usePrec) {
+    printer.stream(Anasazi::Errors) << "Constructing Incomplete Cholesky preconditioner..." << std::flush;
+    Ifpack precFactory;
+    // additive-Schwartz incomplete Cholesky with thresholding; see IFPACK documentation
+    std::string precType = "IC stand-alone";
+    int overlapLevel = 0;
+    prec = Teuchos::rcp( precFactory.Create(precType,Kshift.get(),overlapLevel) );
+    // parameters for preconditioner
+    Teuchos::ParameterList precParams;
+    precParams.set("fact: drop tolerance",prec_dropTol);
+    precParams.set("fact: level-of-fill",prec_lofill);
+    IFPACK_CHK_ERR(prec->SetParameters(precParams));
+    IFPACK_CHK_ERR(prec->Initialize());
+    IFPACK_CHK_ERR(prec->Compute());
+    //
+    printer.stream(Anasazi::Errors)
+      << " done." << std::endl;
+    // encapsulate this preconditioner into a IFPACKPrecOp class
+    PrecOp = Teuchos::rcp( new Epetra_InvOperator(&*prec) );
+  }
 
   // Create an Epetra_MultiVector for an initial vector to start the solver.
   // Note:  This needs to have the same number of columns as the blocksize.
@@ -73,6 +117,10 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
   MyProblem->setNEV( nev );
 
+  if (usePrec) {
+    MyProblem->setPrec(PrecOp);
+  }
+
   // Done providing information to eigenproblem
   bool boolret = MyProblem->setProblem();
   if (boolret != true) {
@@ -82,6 +130,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
   // Create parameter list to pass into the solver manager
   Teuchos::ParameterList MyPL;
+  MyPL.set( "Verbosity", verbosity );
   MyPL.set( "Which", "SM" );  // "SM" or "LM" - smallest or largest eig vals.
   MyPL.set( "Block Size", blockSize );
   MyPL.set( "Num Blocks", numBlocks );
@@ -93,6 +142,11 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
   // Solve the problem
   Anasazi::ReturnType returnCode = MySolverMan.solve();
+
+  // print some precond info
+  if (usePrec) {
+    printer.stream(Anasazi::FinalSummary) << *prec << std::endl;
+  }
 
   // Get the eigenvalues and eigenvectors from the eigenproblem
   Anasazi::Eigensolution<double,MV> sol = MyProblem->getSolution();
@@ -118,9 +172,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   return 0;
 }
 
-// Include header for Ifpack incomplete Cholesky preconditioner
-#include "Ifpack.h"
-#include "Epetra_InvOperator.h"
+
 
 int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   using namespace Anasazi;

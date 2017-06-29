@@ -27,6 +27,6 @@ begin eigen solver my_solver
   block size = 10
   number of blocks = 2
   maximum restarts = 50
-  target residual = 1e-8
+  target residual = 1e-10
 end
 
