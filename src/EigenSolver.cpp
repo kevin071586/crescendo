@@ -5,8 +5,8 @@
 #include "AnasaziBlockDavidsonSolMgr.hpp"
 #include "AnasaziBasicOutputManager.hpp"
 #include "AnasaziEpetraAdapter.hpp"
-#include "Epetra_CrsMatrix.h"
 
+#include "Epetra_FECrsMatrix.h"
 #include "Epetra_Map.h"
 #include "EpetraExt_MatrixMatrix.h"
 
@@ -57,7 +57,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
   // Create the shifted system K - sigma * M.
   double sigma = shift;
-  Teuchos::RCP<Epetra_CrsMatrix> Kshift = Teuchos::rcp( new Epetra_CrsMatrix( *K ) );
+  Teuchos::RCP<Epetra_FECrsMatrix> Kshift = Teuchos::rcp( new Epetra_FECrsMatrix( *K ) );
 
   int addErr = EpetraExt::MatrixMatrix::Add( *M, false, -sigma, *Kshift, 1.0 );
   if (addErr != 0) {
