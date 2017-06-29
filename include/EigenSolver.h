@@ -25,8 +25,6 @@ class EigenSolver {
 
     int Solve(Epetra_FECrsMatrix& K, Epetra_FECrsMatrix& M);
 
-    int SolveIfpack(Epetra_FECrsMatrix& K, Epetra_FECrsMatrix& M);
-
     void setParams(const ParserCmdBlock& p) {m_solverParams = p;}
 
   private:
