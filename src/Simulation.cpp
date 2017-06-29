@@ -77,6 +77,7 @@ void Simulation::Execute()
 
   // Solve eigen problem
   EigenSolver eigSolver(m_stkComm);
+  eigSolver.setParams(m_parserData.getCmdBlock("eigen solver"));
   
   // Wrap the MPI communicator so Epetra can use it
   Epetra_MpiComm epetraComm(m_stkComm);

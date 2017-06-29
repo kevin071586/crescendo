@@ -8,6 +8,7 @@
 
 #include "stk_util/parallel/Parallel.hpp"
 
+#include "ParserCmdBlock.h"
 
 class EigenSolver {
   public:
@@ -16,7 +17,10 @@ class EigenSolver {
     ~EigenSolver() {};
 
     int Solve(Epetra_FECrsMatrix& K, Epetra_FECrsMatrix& M);
+
     int SolveIfpack(Epetra_FECrsMatrix& K, Epetra_FECrsMatrix& M);
+
+    void setParams(const ParserCmdBlock& p) {m_solverParams = p;}
 
     std::vector<double>* m_eigen_values;
     Teuchos::RCP<Epetra_MultiVector> m_eigen_vectors;
@@ -24,6 +28,7 @@ class EigenSolver {
   private:
     // Parser m_parserData; TODO: need to include header for this type
     stk::ParallelMachine m_stkComm;
+    ParserCmdBlock m_solverParams;
 };
 
 #endif // EIGENSOLVER_HPP

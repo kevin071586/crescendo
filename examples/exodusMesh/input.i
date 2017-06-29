@@ -16,10 +16,17 @@ begin results output output_name
 end
 
 begin eigen solver my_solver
+  #number of modes = 10
+  #block size = 30 
+  #number of blocks = 5
+  #maximum restarts = 100
+  #target residual = 1.0e-8
+
+  # small problem settings
   number of modes = 10
-  block size = 30 
-  number of blocks = 5
+  block size = 10
+  number of blocks = 2
   maximum restarts = 100
-  target residual = 1.0e-8
+  target residual = 1e-8
 end
 

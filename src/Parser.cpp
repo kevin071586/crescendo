@@ -126,6 +126,8 @@ void Parser::getKeyValuePair( std::string line, std::string& key, std::string& v
 
 
 // Get a ParserCmdBlock object by block type
+// TODO: This will return the first block of the type it finds.. if
+// there are multiple blocks of this type defined it will not work right.
 // ==================================================================
 ParserCmdBlock Parser::getCmdBlock(std::string type) 
 {

@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
   // --------------------------------------------------------------------------
   stk::create_log_file("output", logFile);
   std::ostream& outputP0 = *(stk::get_log_ostream("output"));
-  outputP0 << "This is a test";
+  outputP0 << "This is a test" << std::endl;
   sierra::pout() << "Sierra parallel output stream" << stk::parallel_machine_rank(stkComm) << std::endl;
 
   // Parse the input deck

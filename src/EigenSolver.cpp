@@ -1,4 +1,4 @@
-#include <EigenSolver.h>
+#include <iostream>
 
 #include "AnasaziConfigDefs.hpp"
 #include "AnasaziBasicEigenproblem.hpp"
@@ -17,6 +17,9 @@
 #include "Epetra_Map.h"
 #include "EpetraExt_MatrixMatrix.h"
 
+#include <EigenSolver.h>
+
+#include "stk_util/environment/OutputLog.hpp"
 
 // Constructor
 EigenSolver::EigenSolver(stk::ParallelMachine stkComm) {
@@ -26,6 +29,9 @@ EigenSolver::EigenSolver(stk::ParallelMachine stkComm) {
 int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
   Epetra_MpiComm Comm(m_stkComm);
+
+  std::ostream& outputP0 = *(stk::get_log_ostream("output"));
+  outputP0 << "Solving Eigenproblem ..." << std::endl;
 
   // Create an Anasazi output manager
   Anasazi::BasicOutputManager<double> printer;
@@ -58,11 +64,15 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   //  NOTE: See https://trilinos.org/pipermail/trilinos-users/2008-September/000822.html
   //  for some insight into choosing parameters.
   //
-  const int    nev         = 10;
-  const int    blockSize   = 10;
-  const int    numBlocks   = 2;
-  const int    maxRestarts = 100;
-  const double tol         = 1.0e-8;
+  std::cout << "number of modes = " << m_solverParams.getFieldInt("number of modes") << std::endl;
+  std::cout << "block size = " << m_solverParams.getFieldInt("block size") << std::endl;
+  std::cout << "number of blocks = " << m_solverParams.getFieldInt("number of blocks") << std::endl;
+
+  const int    nev         = m_solverParams.getFieldInt("number of modes");
+  const int    blockSize   = m_solverParams.getFieldInt("block size");
+  const int    numBlocks   = m_solverParams.getFieldInt("number of blocks");
+  const int    maxRestarts = m_solverParams.getFieldInt("maximum restarts");
+  const double tol         = m_solverParams.getFieldInt("target residual");
 
   typedef Epetra_MultiVector MV;
   typedef Epetra_Operator OP;
