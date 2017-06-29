@@ -6,14 +6,8 @@
 #include "AnasaziBasicOutputManager.hpp"
 #include "AnasaziEpetraAdapter.hpp"
 #include "Epetra_CrsMatrix.h"
-#include "Teuchos_CommandLineProcessor.hpp"
 
-#ifdef HAVE_MPI
 #include "Epetra_MpiComm.h"
-#include <mpi.h>
-#else
-#include "Epetra_SerialComm.h"
-#endif
 #include "Epetra_Map.h"
 #include "EpetraExt_MatrixMatrix.h"
 
@@ -36,10 +30,6 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   // Create an Anasazi output manager
   Anasazi::BasicOutputManager<double> printer;
   printer.stream(Anasazi::Errors) << Anasazi::Anasazi_Version() << std::endl << std::endl;
-
-  // Get the sorting string from the command line
-  std::string which("SM");
-  Teuchos::CommandLineProcessor cmdp(false,true);
 
   Teuchos::RCP<Epetra_FECrsMatrix> K = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Kmat), false);
   Teuchos::RCP<Epetra_FECrsMatrix> M = Teuchos::rcp(const_cast<Epetra_FECrsMatrix*>(&Mmat), false);
@@ -100,7 +90,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
   // Create parameter list to pass into the solver manager
   Teuchos::ParameterList MyPL;
-  MyPL.set( "Which", which );
+  MyPL.set( "Which", "SM" );  // "SM" or "LM" - smallest or largest eig vals.
   MyPL.set( "Block Size", blockSize );
   MyPL.set( "Num Blocks", numBlocks );
   MyPL.set( "Maximum Restarts", maxRestarts );
@@ -178,36 +168,20 @@ int EigenSolver::SolveIfpack(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat)
   //************************************
   // Get the parameters from the command line
   //************************************
-  //
   int    nev       = 10;
   int    blockSize = 10;
   int    numBlocks   = 3; //4;
   int    maxRestarts = 100; 
   double tol       = 1.0e-8;
-  int numElements = 10;     
   bool verbose = false;    
   std::string which("SM");  
   bool usePrec = true;      
   double prec_dropTol = 1e-4;
   int prec_lofill = 0;
-  Teuchos::CommandLineProcessor cmdp(false,true);
-  cmdp.setOption("nev",&nev,"Number of eigenpairs to compted.");
-  cmdp.setOption("blockSize",&blockSize,"Block size.");
-  cmdp.setOption("numBlocks",&numBlocks,"Number of blocks in basis.");
-  cmdp.setOption("maxRestarts",&maxRestarts,"Maximum number of restarts.");
-  cmdp.setOption("tol",&tol,"Relative convergence tolerance.");
-  cmdp.setOption("numElements",&numElements,"Number of elements in the discretization.");
-  cmdp.setOption("verbose","quiet",&verbose,"Print messages and results.");
-  cmdp.setOption("sort",&which,"Targetted eigenvalues (SM or LM).");
-  cmdp.setOption("usePrec","noPrec",&usePrec,"Use Ifpack for preconditioning.");
-  cmdp.setOption("prec_dropTol",&prec_dropTol,"Preconditioner: drop tolerance.");
-  cmdp.setOption("prec_lofill",&prec_lofill,"Preconditioner: level of fill.");
-
 
   //************************************
   // Create an Anasazi output manager
   //************************************
-  //
   // Set verbosity level
   int verbosity = Anasazi::Errors + Anasazi::Warnings;
   if (verbose) {
