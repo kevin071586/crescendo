@@ -293,11 +293,7 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
   ParserCmdBlock cmdBlock = m_parserData.getCmdBlock("finite element model");
   const double rho = cmdBlock.getFieldDouble("density");
   const double E = cmdBlock.getFieldDouble("youngs modulus");
-  const double nu = cmdBlock.getFieldDouble("poissons ratio");
-  std::cout << "Density: " << rho << std::endl;
-  std::cout << "Youngs Modulus: " << E << std::endl;
-  std::cout << "Poissons Ratio: " << nu << std::endl;
-   
+  const double nu = cmdBlock.getFieldDouble("poissons ratio");   
 
   // Define some important dimensions
   const int numCubPoints = elementData.m_numCubPoints;

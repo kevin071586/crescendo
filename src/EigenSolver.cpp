@@ -53,10 +53,6 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   //  NOTE: See https://trilinos.org/pipermail/trilinos-users/2008-September/000822.html
   //  for some insight into choosing parameters.
   //
-  std::cout << "number of modes = " << m_solverParams.getFieldInt("number of modes") << std::endl;
-  std::cout << "block size = " << m_solverParams.getFieldInt("block size") << std::endl;
-  std::cout << "number of blocks = " << m_solverParams.getFieldInt("number of blocks") << std::endl;
-
   const int    nev         = m_solverParams.getFieldInt("number of modes");
   const int    blockSize   = m_solverParams.getFieldInt("block size");
   const int    numBlocks   = m_solverParams.getFieldInt("number of blocks");
