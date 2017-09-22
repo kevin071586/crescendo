@@ -44,7 +44,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   printer.setOStream(Teuchos::rcp(&outputP0, false));
 
   // Set verbosity level
-  bool verbose = false;    // Move this to input deck
+  bool verbose = true;    // Move this to input deck
   int verbosity = Anasazi::Errors + Anasazi::Warnings;
   if (verbose) {
     verbosity += Anasazi::FinalSummary + Anasazi::TimingDetails;
@@ -208,22 +208,32 @@ void EigenSolver::computePrintResiduals(const Epetra_FECrsMatrix& K,
     MVT::MvNorm( Kvec, normR );
   }
 
-    // Print the results
-  outputP0.setf(std::ios_base::right, std::ios_base::adjustfield);
-  outputP0 << "Solver manager returned " << (returnCode == Anasazi::Converged ? "converged." : "unconverged.") << std::endl;
-  outputP0 << std::endl;
-  outputP0 << "------------------------------------------------------" << std::endl;
-  outputP0 << std::setw(16)<<"Eigenvalue"
-           << std::setw(18)<<"Direct Residual"
-           << std::endl;
-  outputP0 << "------------------------------------------------------" << std::endl;
+  // Print the results only from processor rank 0
+  // TODO: is there a nicer way to do this without the "if proc == 0" statement?
+  if (stk::parallel_machine_rank(m_stkComm)==0) {
 
-  for (int i=0; i<sol.numVecs; i++) {
-    outputP0 << std::setw(16) << compEvals[i]
-             << std::setw(18) << normR[i]/evals[i].realpart
-             << std::endl;
+    std::ostringstream oss;
+    std::string separator("------------------------------------------------------");
+
+    oss.setf(std::ios_base::right, std::ios_base::adjustfield);
+
+    oss << "Solver manager returned " << (returnCode == Anasazi::Converged ? "converged." : "unconverged.") << std::endl;
+    oss << std::endl;
+    oss << separator << std::endl;
+    oss << std::setw(16)<<"Eigenvalue"
+        << std::setw(18)<<"Direct Residual"
+        << std::endl;
+    oss << separator << std::endl;
+
+    for (int i=0; i<sol.numVecs; i++) {
+      oss << std::setw(16) << compEvals[i]
+               << std::setw(18) << normR[i]/evals[i].realpart
+               << std::endl;
+    }
+    oss << separator << std::endl;
+    //outputP0 << "rank: " << stk::parallel_machine_rank(m_stkComm) << std::endl;
+    outputP0 << oss.str();
   }
-  outputP0 << "------------------------------------------------------" << std::endl;
 
   return;
 }
