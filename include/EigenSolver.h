@@ -33,7 +33,8 @@ class EigenSolver {
 
     ParserCmdBlock m_solverParams;
 
-    std::ostream& outputP0 = *(stk::get_log_ostream("logfile"));
+    // std::ostream& outputP0 = *(stk::get_log_ostream("logfile"));
+    std::ostream& outputP0 = sierra::out();
 
     void computePrintResiduals(const Epetra_FECrsMatrix& K, 
             const Epetra_FECrsMatrix& M,

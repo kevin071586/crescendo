@@ -21,6 +21,7 @@ ParserDictionary::ParserDictionary()
   addCmdBlockKey("block size", keyType::KEY_INT, false);
   addCmdBlockKey("number of blocks", keyType::KEY_INT, false);
   addCmdBlockKey("maximum restarts", keyType::KEY_INT, false);
+  addCmdBlockKey("number of restart blocks", keyType::KEY_INT, false);
   addCmdBlockKey("target residual", keyType::KEY_DOUBLE, false);
   addCmdBlockKey("shift", keyType::KEY_DOUBLE, false);
 

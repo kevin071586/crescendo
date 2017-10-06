@@ -10,6 +10,8 @@
 #include "Epetra_Map.h"
 #include "EpetraExt_MatrixMatrix.h"
 
+#include "stk_util/environment/Env.hpp"                 // for section_title
+
 // Include header for Ifpack incomplete Cholesky preconditioner
 #include "Ifpack.h"
 #include "Epetra_InvOperator.h"
@@ -24,7 +26,7 @@ EigenSolver::EigenSolver(stk::ParallelMachine stkComm) {
 }
 
 int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
-  outputP0 << "Solving Eigenproblem ..." << std::endl << std::endl;
+  outputP0 << sierra::Env::section_title("Eigenproblem Solution") << "\n" << std::endl;
 
   //
   //  Variables used for the Block Davidson Method
@@ -48,6 +50,8 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   int verbosity = Anasazi::Errors + Anasazi::Warnings;
   if (verbose) {
     verbosity += Anasazi::FinalSummary + Anasazi::TimingDetails;
+    verbosity += Anasazi::IterationDetails;
+    verbosity += Anasazi::OrthoDetails;
   }
 
   printer.stream(Anasazi::Errors) << Anasazi::Anasazi_Version() << std::endl << std::endl;
@@ -66,9 +70,9 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   }
 
   // Preconditioner parameters
-  bool usePrec = false;      
-  double prec_dropTol = 1e-4;
-  int prec_lofill = 0;
+  bool usePrec = true;      
+  double prec_dropTol = 1e-9;
+  int prec_lofill = 1;
 
   typedef Epetra_MultiVector MV;
   typedef Epetra_Operator OP;
@@ -84,8 +88,10 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
     printer.stream(Anasazi::Errors) << "Constructing Incomplete Cholesky preconditioner..." << std::flush;
     Ifpack precFactory;
     // additive-Schwartz incomplete Cholesky with thresholding; see IFPACK documentation
-    std::string precType = "IC stand-alone";
-    int overlapLevel = 0;
+    //std::string precType = "IC stand-alone";
+    std::string precType = "ILU";
+
+    int overlapLevel = 1;
     prec = Teuchos::rcp( precFactory.Create(precType,Kshift.get(),overlapLevel) );
     // parameters for preconditioner
     Teuchos::ParameterList precParams;
@@ -131,6 +137,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   MyPL.set( "Which", "SM" );  // "SM" or "LM" - smallest or largest eig vals.
   MyPL.set( "Block Size", blockSize );
   MyPL.set( "Num Blocks", numBlocks );
+  MyPL.set( "Num Restart Blocks", 1);
   MyPL.set( "Maximum Restarts", maxRestarts );
   MyPL.set( "Convergence Tolerance", tol );
 
