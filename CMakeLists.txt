@@ -33,7 +33,7 @@ SET(CMAKE_C_COMPILER ${Trilinos_C_COMPILER} )
 SET(CMAKE_Fortran_COMPILER ${Trilinos_Fortran_COMPILER} )
 
 # Compiler flags
-SET(CMAKE_CXX_FLAGS  "${Trilinos_CXX_COMPILER_FLAGS} ${CMAKE_CXX_FLAGS}")
+SET(CMAKE_CXX_FLAGS  "${Trilinos_CXX_COMPILER_FLAGS} ${CMAKE_CXX_FLAGS} -Wall -Wreturn-type")
 SET(CMAKE_C_FLAGS  "${Trilinos_C_COMPILER_FLAGS} ${CMAKE_C_FLAGS}")
 SET(CMAKE_Fortran_FLAGS  "${Trilinos_Fortran_COMPILER_FLAGS} ${CMAKE_Fortran_FLAGS}")
 

@@ -67,10 +67,10 @@ class Simulation
     // Local-to-Global and Global-to-Local DOF Maps (these are hard-coded
     // for 3 dimensions).  They are used to account for the fact that each 
     // node has multiple DOFs: u1 ==> (u1_x, u1_y, u1_z)
-    size_t localIdToLocalDof(size_t localId, int dofNum);
-    size_t localDofToLocalId(size_t localId, int dofNum);
-    size_t globalIdToGlobalDof(size_t globalId, int dofNum);
-    size_t globalDofToGlobalId(size_t globalDof, int dofNum);
+    int localIdToLocalDof(const int localId, const int Num);
+    int localDofToLocalId(const int localId, const int Num);
+    int globalIdToGlobalDof(const int globalId, const int Num);
+    int globalDofToGlobalId(const int globalDof, const int Num);
 
 };
 

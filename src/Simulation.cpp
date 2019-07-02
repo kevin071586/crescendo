@@ -9,6 +9,7 @@
 //
 //
 // ----------------------------------------------------------------------------
+#include "Simulation.h"
 
 #include "Epetra_MpiComm.h"
 #include "Epetra_Map.h"
@@ -31,7 +32,6 @@
 #include "Teuchos_RCP.hpp"                      // For RCP
 
 #include "Element.h"
-#include "Simulation.h"
 #include "ParserCmdBlock.h"
 #include "ElasticMaterial.h"
 #include "EigenSolver.h"
@@ -44,6 +44,7 @@ Simulation::Simulation(Parser& parserData, stk::ParallelMachine stkComm)
 {
   m_parserData = parserData;
   m_stkComm = stkComm;
+  m_spatialDim = 3;
 }
 
 Simulation::~Simulation()
@@ -81,6 +82,7 @@ void Simulation::Execute()
   
   // Wrap the MPI communicator so Epetra can use it
   Epetra_MpiComm epetraComm(m_stkComm);
+  std::cout << "Solving eigenvalue problem..." << std::endl;
   eigSolver.Solve(stiffMatrix, massMatrix); // TODO: working here, not well tested yet.
 
   // TODO: Refactor this --  Eigenvalue problem post-processing
@@ -92,7 +94,6 @@ void Simulation::Execute()
   int num_evecs = freqs.size();
   Epetra_MultiVector evecs = *eigSolver.m_eigen_vectors;
   std::vector<double> evecs_data;
-
   
   std::vector<unsigned> entityCounts;
   stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
@@ -127,18 +128,20 @@ void Simulation::Execute()
   const stk::mesh::BucketVector nodeBuckets = 
     bulkData.get_buckets(stk::topology::NODE_RANK, localSelector);
 
-  for (int i = 0; i < freqs.size(); ++i) {
+  for (size_t i = 0; i < freqs.size(); ++i) {
     m_ioBroker.begin_output_step(exoOutputMesh, freqs[i]);
+    int localDofOffset = -1;
     for (size_t bucketIndex = 0; bucketIndex < nodeBuckets.size(); ++bucketIndex) {
       stk::mesh::Bucket &nodeBucket = *nodeBuckets[bucketIndex];
       double* displacementDataForBucket = stk::mesh::field_data(*displacementsField, nodeBucket);
       
       for (size_t nodeIndex = 0; nodeIndex < nodeBucket.size(); ++nodeIndex) {
-        stk::mesh::Entity node = nodeBucket[nodeIndex];
-        int local_id = bulkData.local_id(node);
-        displacementDataForBucket[m_spatialDim*nodeIndex + 0] = evecs_data[0 + m_spatialDim*local_id + i*num_local_DOF];
-        displacementDataForBucket[m_spatialDim*nodeIndex + 1] = evecs_data[1 + m_spatialDim*local_id + i*num_local_DOF];
-        displacementDataForBucket[m_spatialDim*nodeIndex + 2] = evecs_data[2 + m_spatialDim*local_id + i*num_local_DOF];
+    	++localDofOffset;
+        //stk::mesh::Entity node = nodeBucket[nodeIndex];
+        int local_id = localDofOffset; //bulkData.local_id(node);
+        displacementDataForBucket[m_spatialDim*local_id + 0] = evecs_data[0 + m_spatialDim*local_id + i*num_local_DOF];
+        displacementDataForBucket[m_spatialDim*local_id + 1] = evecs_data[1 + m_spatialDim*local_id + i*num_local_DOF];
+        displacementDataForBucket[m_spatialDim*local_id + 2] = evecs_data[2 + m_spatialDim*local_id + i*num_local_DOF];
       }
     }
 
@@ -167,7 +170,6 @@ void Simulation::initializeInputMesh()
   try {
     m_ioBroker.add_mesh_database(inputDatabase, stk::io::READ_MESH);
     m_ioBroker.create_input_mesh();
-    stk::mesh::MetaData &stkMeshMetaData = m_ioBroker.meta_data();
   }
   catch (const std::runtime_error& e) {
     if (stk::parallel_machine_rank(m_stkComm) == 0) {
@@ -250,22 +252,45 @@ Epetra_Map Simulation::setupEpetraRowMap(int& numNonzeroEstimate)
   // A primary objective is to set up the global ID map for use in initializing
   // the Epetra_Map object
   std::vector<int> myGlobalIdMap(numLocalDof);
+  std::cout << "Proc " << stk::parallel_machine_rank(m_stkComm) << ": numLocalDof: " << numLocalDof << std::endl;
 
   // Bucket loop on local nodes to setup the Epetra Row Map 
   const stk::mesh::BucketVector nodeBuckets = 
     bulkData.get_buckets(stk::topology::NODE_RANK, localSelector);
 
   for (size_t bucketIdx = 0; bucketIdx < nodeBuckets.size(); ++bucketIdx) {
+    std::cout << "nodeBucket index: " << bucketIdx << std::endl;
+    std::cout << "bucket size: " << nodeBuckets[bucketIdx]->size() << std::endl;
+  }
+
+  int localDofOffset = -1;
+  for (size_t bucketIdx = 0; bucketIdx < nodeBuckets.size(); ++bucketIdx) {
     stk::mesh::Bucket &nodeBucket = *nodeBuckets[bucketIdx];
     for (size_t nodeIdx = 0; nodeIdx < nodeBucket.size(); ++nodeIdx) {
+    	++localDofOffset;
       stk::mesh::Entity node = nodeBucket[nodeIdx];
-      const int localId = bulkData.local_id(node);
+      //const int localId = nodeIdx; //bulkData.local_id(node);
+      const int localId = localDofOffset; //bulkData.local_id(node);
+      std::cout << "Proc " << stk::parallel_machine_rank(m_stkComm) << ": local node id: " << bulkData.local_id(node) << std::endl;
       const int globalId = bulkData.identifier(node);
 
       // Assign each DOF to the map.  Note: using local Ids here to index the
       // map, but using the global_id (identifier) to derive a "global DOF
       // identifier" since each node has multiple DOFs.
       // NOTE: this is hard-coded for spatialDim = 3
+
+      // WARNING: Diagnosed a memory error caused by indexing past the end of the
+      // myGlobalIdMap vector; cause was my use of the bulk data local_id() function,
+      // which does return a local index number for each node -- but the locally owned
+      // nodes are not guaranteed to be contiguous.  In my case, I was getting locally
+      // owned nodes with indices greater than the number of local nodes, I guess due to
+      // ghosted nodes also having a local id.  By manually indexing the local nodes,
+      // I have avoided this memory corruption issue.  However, in the future I will
+      // need to evaluate more robust options for equation indexing and DOF mapping.
+
+      //myGlobalIdMap[localIdToLocalDof(localId, 0)] = globalIdToGlobalDof(globalId, 0);
+      //myGlobalIdMap[localIdToLocalDof(localId, 1)] = globalIdToGlobalDof(globalId, 1);
+      //myGlobalIdMap[localIdToLocalDof(localId, 2)] = globalIdToGlobalDof(globalId, 2);
       myGlobalIdMap[localIdToLocalDof(localId, 0)] = globalIdToGlobalDof(globalId, 0);
       myGlobalIdMap[localIdToLocalDof(localId, 1)] = globalIdToGlobalDof(globalId, 1);
       myGlobalIdMap[localIdToLocalDof(localId, 2)] = globalIdToGlobalDof(globalId, 2);
@@ -352,11 +377,13 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
     const int numElemDof = m_spatialDim*numFields;
 
     // ComputeElementMassMatrices(...)
+    std::cout << "Computing mass matrix..." << std::endl;
     FieldContainer<double> elemMassMatrix(numElements, numElemDof, numElemDof);
     elementData.integrateMassMatrix(elemMassMatrix, hexGValsTransformed, 
         hexGValsTransformedWeighted, rho, m_spatialDim);
     
     // AssembleMassMatrix(...)
+    std::cout << "Assembling mass matrix..." << std::endl;
     for (size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex) {
       for (int i=0; i < elemMassMatrix.dimension(1); ++i) {
         for (int j=0; j < elemMassMatrix.dimension(2); ++j) {
@@ -390,10 +417,12 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
     elasticMat.setPoissonsRatio(nu);
     FieldContainer<double> C = elasticMat.stiffnessTensor();
 
+    std::cout << "Computing stiffness matrix..." << std::endl;
     elementData.integrateStiffnessMatrix(stiffnessMatrix, hexGGradientTransformed,
       hexGGradientTransformedWeighted, C);
 
-    // AsssembleStiffnessMatrix(...)
+    // AssembleStiffnessMatrix(...)
+    std::cout << "Assembling stiffness matrix..." << std::endl;
     for(size_t elemIndex = 0; elemIndex < elemBucket.size(); ++elemIndex){
       for( int i=0; i<stiffnessMatrix.dimension(1); ++i ){
         for( int j=0; j<stiffnessMatrix.dimension(2); ++j ){
@@ -408,10 +437,13 @@ void Simulation::elementBucketLoop(Element elementData, Epetra_FECrsMatrix& mass
 
   }
 
+  std::cout << "Local matrix assembly complete." << std::endl;
+
   // Call .GlobalAssemble() on mass and stiffness matrix
   massMatrix.GlobalAssemble();
   stiffMatrix.GlobalAssemble();
   
+  std::cout << "Global matrix assembly complete." << std::endl;
   return;
 }
 
@@ -459,15 +491,15 @@ void Simulation::processBucketNodes(const stk::mesh::Bucket& elemBucket,
 
 
 // Local-to-Global and Global-to-Local DOF Maps
-size_t Simulation::localIdToLocalDof(size_t localId, int dofNum)
+int Simulation::localIdToLocalDof(const int localId, const int dofNum)
 { return m_spatialDim*localId + dofNum; }
 
-size_t Simulation::localDofToLocalId(size_t localDof, int dofNum)
+int Simulation::localDofToLocalId(const int localDof, const int dofNum)
 { return (localDof - dofNum)/m_spatialDim; }
 
-size_t Simulation::globalIdToGlobalDof(size_t globalId, int dofNum)
+int Simulation::globalIdToGlobalDof(const int globalId, const int dofNum)
 { return m_spatialDim*globalId + dofNum; }
 
-size_t Simulation::globalDofToGlobalId(size_t globalDof, int dofNum)
+int Simulation::globalDofToGlobalId(const int globalDof, const int dofNum)
 { return (globalDof - dofNum)/m_spatialDim; }
 

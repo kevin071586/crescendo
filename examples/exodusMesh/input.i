@@ -20,7 +20,7 @@ begin eigen solver my_solver
   block size = 20 
   number of blocks = 10
   maximum restarts = 100
-  target residual = 1.0e-6
+  target residual = 1.0e-4
   shift = 0.1
 
   # small problem settings

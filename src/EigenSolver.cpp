@@ -76,7 +76,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
 
   typedef Epetra_MultiVector MV;
   typedef Epetra_Operator OP;
-  typedef Anasazi::MultiVecTraits<double, Epetra_MultiVector> MVT;
+  //typedef Anasazi::MultiVecTraits<double, Epetra_MultiVector> MVT;
 
   //************************************
   // Select the Preconditioner
@@ -92,14 +92,22 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
     std::string precType = "ILU";
 
     int overlapLevel = 1;
+    std::cout << "Making preconditioner from factory" << std::endl;
     prec = Teuchos::rcp( precFactory.Create(precType,Kshift.get(),overlapLevel) );
+    if (prec.is_null()) {
+      std::cout << "preconditioner is a nullptr!" << std::endl;
+    }
+
     // parameters for preconditioner
     Teuchos::ParameterList precParams;
     precParams.set("fact: drop tolerance",prec_dropTol);
     precParams.set("fact: level-of-fill",prec_lofill);
     IFPACK_CHK_ERR(prec->SetParameters(precParams));
+    std::cout << "done setting preconditioner parameters." << std::endl;
     IFPACK_CHK_ERR(prec->Initialize());
+    std::cout << "done initializing preconditioner." << std::endl;
     IFPACK_CHK_ERR(prec->Compute());
+    std::cout << "done constructing preconditioner." << std::endl;
     //
     printer.stream(Anasazi::Errors)
       << " done." << std::endl;
