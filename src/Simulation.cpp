@@ -133,15 +133,20 @@ void Simulation::Execute()
     int localDofOffset = -1;
     for (size_t bucketIndex = 0; bucketIndex < nodeBuckets.size(); ++bucketIndex) {
       stk::mesh::Bucket &nodeBucket = *nodeBuckets[bucketIndex];
-      double* displacementDataForBucket = stk::mesh::field_data(*displacementsField, nodeBucket);
+      //double* displacementDataForBucket = stk::mesh::field_data(*displacementsField, nodeBucket);
       
       for (size_t nodeIndex = 0; nodeIndex < nodeBucket.size(); ++nodeIndex) {
+    	double* displacementData = stk::mesh::field_data(*displacementsField, nodeBucket[nodeIndex]);
     	++localDofOffset;
+    	std::cout << "local offset: " << localDofOffset << std::endl;
         //stk::mesh::Entity node = nodeBucket[nodeIndex];
         int local_id = localDofOffset; //bulkData.local_id(node);
-        displacementDataForBucket[m_spatialDim*local_id + 0] = evecs_data[0 + m_spatialDim*local_id + i*num_local_DOF];
-        displacementDataForBucket[m_spatialDim*local_id + 1] = evecs_data[1 + m_spatialDim*local_id + i*num_local_DOF];
-        displacementDataForBucket[m_spatialDim*local_id + 2] = evecs_data[2 + m_spatialDim*local_id + i*num_local_DOF];
+        //displacementDataForBucket[m_spatialDim*nodeIndex + 0] = evecs_data[0 + m_spatialDim*local_id + i*num_local_DOF];
+        //displacementDataForBucket[m_spatialDim*nodeIndex + 1] = evecs_data[1 + m_spatialDim*local_id + i*num_local_DOF];
+        //displacementDataForBucket[m_spatialDim*nodeIndex + 2] = evecs_data[2 + m_spatialDim*local_id + i*num_local_DOF];
+        displacementData[0] = evecs_data[0 + m_spatialDim*local_id + i*num_local_DOF];
+        displacementData[1] = evecs_data[1 + m_spatialDim*local_id + i*num_local_DOF];
+        displacementData[2] = evecs_data[2 + m_spatialDim*local_id + i*num_local_DOF];
       }
     }
 
