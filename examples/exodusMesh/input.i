@@ -7,8 +7,8 @@ begin finite element model test_model
   poissons ratio = 0.0
   density = 1.0
   #database name = two_hex8_elements.g
-  #database name = hex8_10x10x10.g
-  database name = hex8_10x10x10_thin.g
+  database name = hex8_10x10x10.g
+  #database name = hex8_10x10x10_thin.g
 end
 
 begin results output output_name

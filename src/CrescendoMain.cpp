@@ -6,6 +6,8 @@
 #include "stk_util/environment/Env.hpp"
 #include "stk_util/environment/OutputLog.hpp"
 #include "stk_util/environment/ProgramOptions.hpp"
+#include <stk_util/environment/ParsedOptions.hpp>
+#include <stk_util/environment/ParseCommandLineArgs.hpp>
 
 #include "Parser.h"
 #include "Simulation.h"
@@ -17,26 +19,30 @@ namespace {
   const size_t ERROR = 1;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, const char **argv) {
+  char** m_argv = const_cast<char**>(argv);
+
   // Get a parallel communicator
-  stk::ParallelMachine stkComm = stk::parallel_machine_init(&argc, &argv);
+  stk::ParallelMachine stkComm = stk::parallel_machine_init(&argc, &m_argv);
 
   // Broadcast argc and argv to all processors
-  stk::BroadcastArg b_arg(stkComm, argc, argv);
-
-  // Program option variables
-  std::string inputDeck; 
-  std::string logFile("crescendo.log");
+  stk::BroadcastArg b_arg(stkComm, argc, m_argv);
 
   // Populate program options
-  po::options_description desc("Program options");
-  desc.add_options()
-    ("help,h", "Print help messages")
-    ("input,i", po::value<std::string>(&inputDeck)->required(), "Provide input file")
-    ("output,o", po::value<std::string>(&logFile), "Output log file");
+  stk::OptionsSpecification optionsSpec;
+  optionsSpec.add_options()
+    ("help,h", false, false, "Print help messages")
+    ("input,i", false, true, "Provide input file")
+    ("output,o", "Output log file", stk::DefaultValue<std::string>("crescendo.log"));
 
-  stk::get_options_description().add(desc);
+  stk::get_options_specification().add(optionsSpec);
+  stk::ParsedOptions parsedOptions;
+  stk::parse_command_line_args(argc, argv, optionsSpec, parsedOptions);
 
+  std::string inputDeck = parsedOptions["input"].as<std::string>();
+  std::string logFile = parsedOptions["output"].as<std::string>();
+
+  /*
   po::variables_map vm;
 
   try {
@@ -55,6 +61,7 @@ int main(int argc, char *argv[]) {
     std::cerr << desc << std::endl;
     return ERROR;
   }
+  */
 
   // Open log file(s)
   // --------------------------------------------------------------------------
@@ -110,6 +117,7 @@ int main(int argc, char *argv[]) {
   }
   catch (const std::runtime_error& e) {
     stk::parallel_machine_finalize();
+    std::cout << "CrescendoMain() :: Failed to execute.";
     return SUCCESS;
   }
 

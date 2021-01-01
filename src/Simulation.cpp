@@ -72,86 +72,93 @@ void Simulation::Execute()
   Epetra_FECrsMatrix stiffMatrix(Copy, epetraRowMap, numNonzeroEstimate);
   Epetra_FECrsMatrix massMatrix(Copy, epetraRowMap, numNonzeroEstimate);
 
-
   elementBucketLoop(elementData, massMatrix, stiffMatrix);
 
   // Solve eigen problem
   EigenSolver eigSolver(m_stkComm);
   eigSolver.setParams(m_parserData.getCmdBlock("eigen solver"));
-  
+
   // Wrap the MPI communicator so Epetra can use it
-  Epetra_MpiComm epetraComm(m_stkComm);
-  eigSolver.Solve(stiffMatrix, massMatrix); // TODO: working here, not well tested yet.
+  // Epetra_MpiComm epetraComm(m_stkComm);
+  int eigReturn = eigSolver.Solve(stiffMatrix, massMatrix); // TODO: working here, not well tested yet.
+//  int eigReturn = eigSolver.SolveBKS(stiffMatrix, massMatrix); // TODO: working here, not well tested yet.
+//  int eigReturn = eigSolver.SolveNoOp(stiffMatrix, massMatrix); // TODO: working here, not well tested yet.
+//  int eigReturn = -1;
 
-  // TODO: Refactor this --  Eigenvalue problem post-processing
-  
-  // Write output mesh
-  std::vector<double> freqs = *(eigSolver.m_eigen_values);
-  
-  // Get associated eigenvector
-  int num_evecs = freqs.size();
-  Epetra_MultiVector evecs = *eigSolver.m_eigen_vectors;
-  std::vector<double> evecs_data;
-
-  
-  std::vector<unsigned> entityCounts;
-  stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
-  stk::mesh::Selector localSelector = m_ioBroker.meta_data().locally_owned_part();
-  stk::mesh::count_entities(localSelector, bulkData, entityCounts);
-  const int numLocalNodes = entityCounts[stk::topology::NODE_RANK];
-  const int num_local_DOF = m_spatialDim*numLocalNodes;
-
-  evecs_data.reserve(num_evecs*num_local_DOF);
-  evecs.ExtractCopy(&evecs_data[0], num_local_DOF);
-  std::cout << "Epetra_MV Num Vectors: " << evecs.NumVectors() << std::endl;
-  std::cout << "Epetra_MV My Length:   " << evecs.MyLength() << std::endl;
-
-  
-  // TODO: should define field types elsewhere
-  //
-  // TODO: Trying to figure out how to 'get' the displacement field off of the results
-  // mesh so that I can write out to it after solving the problem ... a few lines below
-  // remain commented, and I am uncommenting them as I work through this.
-  // ------------------------------------------------------------------------------
-  typedef stk::mesh::Field<double, stk::mesh::Cartesian3d> VectorField;
-  VectorField* displacementsField = m_ioBroker.meta_data().get_field<VectorField>(stk::topology::NODE_RANK,
-                                                                    "displacements");
-
-  // stk::mesh::FieldBase& displacementsField = *m_ioBroker.meta_data().get_field<VectorField>(
-  //                                             stk::topology::NODE_RANK,
-  //                                             "displacements");
-
-  std::vector<const stk::mesh::FieldBase*> field_list(1, displacementsField);
-
-  // DUPLICATE CODE TO GET NODEBUCKETS:
-  const stk::mesh::BucketVector nodeBuckets = 
-    bulkData.get_buckets(stk::topology::NODE_RANK, localSelector);
-
-  for (int i = 0; i < freqs.size(); ++i) {
-    m_ioBroker.begin_output_step(exoOutputMesh, freqs[i]);
-    for (size_t bucketIndex = 0; bucketIndex < nodeBuckets.size(); ++bucketIndex) {
-      stk::mesh::Bucket &nodeBucket = *nodeBuckets[bucketIndex];
-      double* displacementDataForBucket = stk::mesh::field_data(*displacementsField, nodeBucket);
-      
-      for (size_t nodeIndex = 0; nodeIndex < nodeBucket.size(); ++nodeIndex) {
-        stk::mesh::Entity node = nodeBucket[nodeIndex];
-        int local_id = bulkData.local_id(node);
-        displacementDataForBucket[m_spatialDim*nodeIndex + 0] = evecs_data[0 + m_spatialDim*local_id + i*num_local_DOF];
-        displacementDataForBucket[m_spatialDim*nodeIndex + 1] = evecs_data[1 + m_spatialDim*local_id + i*num_local_DOF];
-        displacementDataForBucket[m_spatialDim*nodeIndex + 2] = evecs_data[2 + m_spatialDim*local_id + i*num_local_DOF];
-      }
-    }
-
-    // Send field data for shared nodes across to the other processors.
-    // This communication is necessary to ensure that we don't get a 
-    // bunch of zeros on nodes which are shared (but not owned).  This
-    // must come before any write commands.
-    stk::mesh::communicate_field_data(m_ioBroker.bulk_data(), field_list);
-
-    // Write the output step to disk.
-    m_ioBroker.write_defined_output_fields(exoOutputMesh);
-    m_ioBroker.end_output_step(exoOutputMesh);
+  if (eigReturn == -1) {
+      std::cout << "Exiting from Execute()" << std::endl;
+      return;
   }
+
+//  // TODO: Refactor this --  Eigenvalue problem post-processing
+//
+//  // Write output mesh
+//  std::vector<double> freqs = *(eigSolver.m_eigen_values);
+//
+//  // Get associated eigenvector
+//  int num_evecs = freqs.size();
+//  Epetra_MultiVector evecs = *eigSolver.m_eigen_vectors;
+//  std::vector<double> evecs_data;
+//
+//
+//  std::vector<long unsigned> entityCounts;
+//  stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
+//  stk::mesh::Selector localSelector = m_ioBroker.meta_data().locally_owned_part();
+//  stk::mesh::count_entities(localSelector, bulkData, entityCounts);
+//  const int numLocalNodes = entityCounts[stk::topology::NODE_RANK];
+//  const int num_local_DOF = m_spatialDim*numLocalNodes;
+//
+//  evecs_data.reserve(num_evecs*num_local_DOF);
+//  evecs.ExtractCopy(&evecs_data[0], num_local_DOF);
+//  std::cout << "Epetra_MV Num Vectors: " << evecs.NumVectors() << std::endl;
+//  std::cout << "Epetra_MV My Length:   " << evecs.MyLength() << std::endl;
+//
+//
+//  // TODO: should define field types elsewhere
+//  //
+//  // TODO: Trying to figure out how to 'get' the displacement field off of the results
+//  // mesh so that I can write out to it after solving the problem ... a few lines below
+//  // remain commented, and I am uncommenting them as I work through this.
+//  // ------------------------------------------------------------------------------
+//  typedef stk::mesh::Field<double, stk::mesh::Cartesian3d> VectorField;
+//  VectorField* displacementsField = m_ioBroker.meta_data().get_field<VectorField>(stk::topology::NODE_RANK,
+//                                                                    "displacements");
+//
+//  // stk::mesh::FieldBase& displacementsField = *m_ioBroker.meta_data().get_field<VectorField>(
+//  //                                             stk::topology::NODE_RANK,
+//  //                                             "displacements");
+//
+//  std::vector<const stk::mesh::FieldBase*> field_list(1, displacementsField);
+//
+//  // DUPLICATE CODE TO GET NODEBUCKETS:
+//  const stk::mesh::BucketVector nodeBuckets =
+//    bulkData.get_buckets(stk::topology::NODE_RANK, localSelector);
+//
+//  for (int i = 0; i < freqs.size(); ++i) {
+//    m_ioBroker.begin_output_step(exoOutputMesh, freqs[i]);
+//    for (size_t bucketIndex = 0; bucketIndex < nodeBuckets.size(); ++bucketIndex) {
+//      stk::mesh::Bucket &nodeBucket = *nodeBuckets[bucketIndex];
+//      double* displacementDataForBucket = stk::mesh::field_data(*displacementsField, nodeBucket);
+//
+//      for (size_t nodeIndex = 0; nodeIndex < nodeBucket.size(); ++nodeIndex) {
+//        stk::mesh::Entity node = nodeBucket[nodeIndex];
+//        int local_id = bulkData.local_id(node);
+//        displacementDataForBucket[m_spatialDim*nodeIndex + 0] = evecs_data[0 + m_spatialDim*local_id + i*num_local_DOF];
+//        displacementDataForBucket[m_spatialDim*nodeIndex + 1] = evecs_data[1 + m_spatialDim*local_id + i*num_local_DOF];
+//        displacementDataForBucket[m_spatialDim*nodeIndex + 2] = evecs_data[2 + m_spatialDim*local_id + i*num_local_DOF];
+//      }
+//    }
+//
+//    // Send field data for shared nodes across to the other processors.
+//    // This communication is necessary to ensure that we don't get a
+//    // bunch of zeros on nodes which are shared (but not owned).  This
+//    // must come before any write commands.
+//    stk::mesh::communicate_field_data(m_ioBroker.bulk_data(), field_list);
+//
+//    // Write the output step to disk.
+//    m_ioBroker.write_defined_output_fields(exoOutputMesh);
+//    m_ioBroker.end_output_step(exoOutputMesh);
+//  }
 
   return; 
 }
@@ -237,19 +244,23 @@ Epetra_Map Simulation::setupEpetraRowMap(int& numNonzeroEstimate)
   stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
 
   // Select and count locally-owned elements
-  std::vector<unsigned> entityCounts;
+  std::vector<long unsigned> entityCounts;
   stk::mesh::Selector localSelector = m_ioBroker.meta_data().locally_owned_part();
-  stk::mesh::count_entities(localSelector, bulkData, entityCounts);
+  stk::mesh::Selector universalSelector = m_ioBroker.meta_data().universal_part();
+  stk::mesh::count_entities(universalSelector, bulkData, entityCounts);
 
   // Calculate a rough estimate for number of non-zero entries in each row.  A
   // better estimate here may speed things up.
   const int numLocalNodes = entityCounts[stk::topology::NODE_RANK];
   const int numLocalDof = m_spatialDim*numLocalNodes;
   numNonzeroEstimate = m_spatialDim*numLocalDof;
+  const int myRank = stk::parallel_machine_rank(m_stkComm);
+  std::cout << "rank [" << myRank << "]: numNonzeroEstimate: " << numNonzeroEstimate << std::endl;
 
   // A primary objective is to set up the global ID map for use in initializing
   // the Epetra_Map object
   std::vector<int> myGlobalIdMap(numLocalDof);
+  std::cout << "rank [" << myRank << "]: numLocalDof: " << numLocalDof << std::endl;
 
   // Bucket loop on local nodes to setup the Epetra Row Map 
   const stk::mesh::BucketVector nodeBuckets = 
