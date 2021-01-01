@@ -43,8 +43,8 @@ int main(int argc, const char **argv) {
 
   try {
     stk::parse_command_line_args(argc, argv, optionsSpec, parsedOptions);
-    std::string inputDeck = parsedOptions["input"].as<std::string>();
-    std::string logFile = parsedOptions["output"].as<std::string>();
+    inputDeck = parsedOptions["input"].as<std::string>();
+    logFile = parsedOptions["output"].as<std::string>();
   }
   catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl << std::endl;
