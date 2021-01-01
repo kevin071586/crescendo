@@ -37,31 +37,20 @@ int main(int argc, const char **argv) {
 
   stk::get_options_specification().add(optionsSpec);
   stk::ParsedOptions parsedOptions;
-  stk::parse_command_line_args(argc, argv, optionsSpec, parsedOptions);
 
-  std::string inputDeck = parsedOptions["input"].as<std::string>();
-  std::string logFile = parsedOptions["output"].as<std::string>();
-
-  /*
-  po::variables_map vm;
+  std::string inputDeck;
+  std::string logFile;
 
   try {
-    po::store(po::parse_command_line(argc, argv, desc), vm);
-
-    // handle help option
-    if (vm.count("help")) {
-      std::cout << "Command line options:" << std::endl << desc << std::endl;
-      return ERROR;
-    }
-    
-    po::notify(vm);
+    stk::parse_command_line_args(argc, argv, optionsSpec, parsedOptions);
+    std::string inputDeck = parsedOptions["input"].as<std::string>();
+    std::string logFile = parsedOptions["output"].as<std::string>();
   }
-  catch(po::error& e) {
+  catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl << std::endl;
-    std::cerr << desc << std::endl;
+    std::cerr << optionsSpec << std::endl;
     return ERROR;
   }
-  */
 
   // Open log file(s)
   // --------------------------------------------------------------------------
