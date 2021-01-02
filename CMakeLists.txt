@@ -7,6 +7,9 @@ SET(CMAKE_BUILD_TYPE Release )
 # Get Trilinos as one entity
 FIND_PACKAGE(Trilinos PATHS /home/kevin/code/my_trilinos/install/lib/cmake/ NO_DEFAULT_PATH REQUIRED)
 
+# Get GTest
+#find_package(GTest REQUIRED)
+
 # Echo trilinos build info just for fun
  MESSAGE("\nFound Trilinos!  Here are the details: ")
  MESSAGE("   Trilinos_DIR = ${Trilinos_DIR}")
@@ -49,6 +52,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CRESCENDO_DIR}/bin)
 
 INCLUDE_DIRECTORIES(${Trilinos_INCLUDE_DIRS} 
   ${Trilinos_TPL_INCLUDE_DIRS}
+  ${GTEST_INCLUDE_DIRS}
   ${CRESCENDO_DIR}/include
   )
 
@@ -64,17 +68,12 @@ LINK_DIRECTORIES(${Trilinos_LIBRARY_DIRS} ${Trilinos_TPL_LIBRARY_DIRS})
 
 LINK_LIBRARIES(${Trilinos_LIBRARIES})
 
-ADD_EXECUTABLE( crescendo
-  ${CRESCENDO_DIR}/src/CrescendoMain.cpp
-  ${CRESCENDO_DIR}/src/Simulation.cpp
-  ${CRESCENDO_DIR}/src/Parser.cpp
-  ${CRESCENDO_DIR}/src/ParserCmdBlock.cpp
-  ${CRESCENDO_DIR}/src/ParserUtil.cpp
-  ${CRESCENDO_DIR}/src/ParserDictionary.cpp
-  ${CRESCENDO_DIR}/src/Element.cpp
-  ${CRESCENDO_DIR}/src/ElasticMaterial.cpp
-  ${CRESCENDO_DIR}/src/EigenSolver.cpp
-  )
+file(GLOB CRESCENDO_SRC src/*.cpp)
+ADD_EXECUTABLE(crescendo ${CRESCENDO_SRC})
+
+file(GLOB UNIT_SRC unit_tests/*.cpp)
+add_executable(unit_tests ${UNIT_SRC})
+target_link_libraries(unit_tests ${GTEST_LIBRARIES} pthread)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #  Some boiler plate for future reference
