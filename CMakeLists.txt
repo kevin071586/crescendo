@@ -1,8 +1,8 @@
 CMAKE_MINIMUM_REQUIRED( VERSION 2.6 )
 
 PROJECT( MyApp )
-# SET(CMAKE_BUILD_TYPE Release )
-SET(CMAKE_BUILD_TYPE Debug )
+SET(CMAKE_BUILD_TYPE Release )
+## SET(CMAKE_BUILD_TYPE Debug )
 
 # Get Trilinos as one entity
 FIND_PACKAGE(Trilinos PATHS /home/kevin/code/my_trilinos/install/lib/cmake/ NO_DEFAULT_PATH REQUIRED)
