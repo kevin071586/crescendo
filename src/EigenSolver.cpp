@@ -42,8 +42,9 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   const double shift       = m_solverParams.getFieldDouble("shift");
 
   // Create an Anasazi output manager
-  Anasazi::BasicOutputManager<double> printer;
-  printer.setOStream(Teuchos::rcp(&outputP0, false));
+  Teuchos::FancyOStream fancy_ostream(Teuchos::rcp(&outputP0, false));
+  Anasazi::BasicOutputManager<double> printer(Anasazi::Errors, Teuchos::rcp(&fancy_ostream, false));
+  printer.setFancyOStream(Teuchos::rcp(&fancy_ostream, false));
 
   // Set verbosity level
   bool verbose = true;    // Move this to input deck
@@ -199,7 +200,7 @@ void EigenSolver::computePrintResiduals(const Epetra_FECrsMatrix& K,
               std::vector<double> compEvals) {
 
   typedef Epetra_MultiVector MV;
-  typedef Epetra_Operator OP;
+  //typedef Epetra_Operator OP;
   typedef Anasazi::MultiVecTraits<double, Epetra_MultiVector> MVT;
 
   // Get eigenvectors & eigenvalues from solution 

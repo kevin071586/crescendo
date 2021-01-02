@@ -87,7 +87,7 @@ void Parser::parse()
 // ==================================================================
 bool Parser::isKeyValuePair( std::string line )
 {
-  if (line.find("=") == -1) {
+  if (line.find("=") == -1u) {
     return false;
   }
   return true;
@@ -132,7 +132,7 @@ void Parser::getKeyValuePair( std::string line, std::string& key, std::string& v
 ParserCmdBlock Parser::getCmdBlock(std::string type) 
 {
   ParserCmdBlock cmdBlock;
-  for (int i=0; i < m_cmdBlocks.size(); ++i) {
+  for (unsigned i=0; i < m_cmdBlocks.size(); ++i) {
     cmdBlock = m_cmdBlocks[i];
     if (cmdBlock.getType().compare(type) == 0) { 
       break; 

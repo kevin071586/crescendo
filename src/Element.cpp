@@ -239,7 +239,7 @@ void Element::integrateMassMatrix(FieldContainer<double>& massMatrix,
 
     for(int a=0; a<num_shape_fields; ++a) {
       for(int b=0; b<num_shape_fields; ++b) {
-        for(int i=0; i<space_dim; ++i) {
+        for(unsigned int i=0; i<space_dim; ++i) {
           const int idx_row = a*space_dim + i;
           const int idx_col = b*space_dim + i;
           massMatrix(idx_cell, idx_row, idx_col) = massMatrixAB(idx_cell, a, b);

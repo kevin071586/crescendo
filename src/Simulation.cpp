@@ -95,7 +95,7 @@ void Simulation::Execute()
   Epetra_MultiVector evecs = *eigSolver.m_eigen_vectors;
   std::vector<double> evecs_data;
   
-  std::vector<unsigned> entityCounts;
+  std::vector<size_t> entityCounts;
   stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
   stk::mesh::Selector localSelector = m_ioBroker.meta_data().locally_owned_part();
   stk::mesh::count_entities(localSelector, bulkData, entityCounts);
@@ -244,7 +244,7 @@ Epetra_Map Simulation::setupEpetraRowMap(int& numNonzeroEstimate)
   stk::mesh::BulkData& bulkData = m_ioBroker.bulk_data();
 
   // Select and count locally-owned elements
-  std::vector<unsigned> entityCounts;
+  std::vector<size_t> entityCounts;
   stk::mesh::Selector localSelector = m_ioBroker.meta_data().locally_owned_part();
   stk::mesh::count_entities(localSelector, bulkData, entityCounts);
 
