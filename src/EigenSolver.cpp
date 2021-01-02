@@ -149,6 +149,7 @@ int EigenSolver::Solve(Epetra_FECrsMatrix& Kmat, Epetra_FECrsMatrix& Mmat) {
   MyPL.set( "Num Restart Blocks", 1);
   MyPL.set( "Maximum Restarts", maxRestarts );
   MyPL.set( "Convergence Tolerance", tol );
+  MyPL.set( "Output Stream", Teuchos::rcp(&fancy_ostream, false));
 
   // Create the solver manager
   Anasazi::BlockDavidsonSolMgr<double, MV, OP> MySolverMan(MyProblem, MyPL);
