@@ -7,8 +7,8 @@ begin finite element model test_model
   poissons ratio = 0.0
   density = 1.0
   #database name = two_hex8_elements.g
-  #database name = hex8_10x10x10.g
-  database name = hex8_10x10x10_thin.g
+  database name = hex8_10x10x10.g
+  #database name = hex8_10x10x10_thin.g
 end
 
 begin results output output_name
@@ -18,7 +18,7 @@ end
 begin eigen solver my_solver
   number of modes = 20
   block size = 20 
-  number of blocks = 10
+  number of blocks = 20
   maximum restarts = 100
   target residual = 1.0e-4
   shift = 0.1
