@@ -138,7 +138,6 @@ void Simulation::Execute()
       for (size_t nodeIndex = 0; nodeIndex < nodeBucket.size(); ++nodeIndex) {
     	double* displacementData = stk::mesh::field_data(*displacementsField, nodeBucket[nodeIndex]);
     	++localDofOffset;
-    	std::cout << "local offset: " << localDofOffset << std::endl;
         //stk::mesh::Entity node = nodeBucket[nodeIndex];
         int local_id = localDofOffset; //bulkData.local_id(node);
         //displacementDataForBucket[m_spatialDim*nodeIndex + 0] = evecs_data[0 + m_spatialDim*local_id + i*num_local_DOF];
@@ -276,7 +275,7 @@ Epetra_Map Simulation::setupEpetraRowMap(int& numNonzeroEstimate)
       stk::mesh::Entity node = nodeBucket[nodeIdx];
       //const int localId = nodeIdx; //bulkData.local_id(node);
       const int localId = localDofOffset; //bulkData.local_id(node);
-      std::cout << "Proc " << stk::parallel_machine_rank(m_stkComm) << ": local node id: " << bulkData.local_id(node) << std::endl;
+      //std::cout << "Proc " << stk::parallel_machine_rank(m_stkComm) << ": local node id: " << bulkData.local_id(node) << std::endl;
       const int globalId = bulkData.identifier(node);
 
       // Assign each DOF to the map.  Note: using local Ids here to index the
