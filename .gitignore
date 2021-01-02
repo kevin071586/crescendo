@@ -17,6 +17,13 @@ bin/crescendo_old
 *.dat
 *.csv
 *.log
+bin/
+
+# Eclipse-generated files
+#----------------------------
+.project
+.cproject
+.settings/
 
 # Tags
 #----------------------------
